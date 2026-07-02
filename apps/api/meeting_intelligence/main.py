@@ -1,8 +1,14 @@
+from __future__ import annotations
+
+import time
+from collections import defaultdict, deque
+from collections.abc import Awaitable, Callable
 from uuid import UUID
 
 import structlog
-from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from meeting_intelligence.config import Settings, get_settings
 from meeting_intelligence.intelligence import MeetingIntelligenceEngine
@@ -15,6 +21,7 @@ from meeting_intelligence.schemas import (
 )
 
 logger = structlog.get_logger(__name__)
+settings = get_settings()
 app = FastAPI(
     title="RaeburnAI Meeting Intelligence API",
     version="0.1.0",
@@ -22,28 +29,63 @@ app = FastAPI(
 )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origin_list,
     allow_credentials=False,
     allow_methods=["GET", "POST"],
-    allow_headers=["*"],
+    allow_headers=["content-type", "x-api-key"],
 )
 
 _engine = MeetingIntelligenceEngine()
 _results: dict[str, MeetingIntelligenceResult] = {}
+_rate_window: dict[str, deque[float]] = defaultdict(deque)
+
+
+@app.middleware("http")
+async def rate_limit_and_audit(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
+    client = request.client.host if request.client else "unknown"
+    now = time.monotonic()
+    window = _rate_window[client]
+    while window and now - window[0] > 60:
+        window.popleft()
+    if len(window) >= settings.rate_limit_per_minute:
+        logger.warning("rate_limit_exceeded", client=client, path=request.url.path)
+        return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"})
+    window.append(now)
+    response = await call_next(request)
+    logger.info(
+        "request_completed",
+        method=request.method,
+        path=request.url.path,
+        status_code=response.status_code,
+    )
+    return response
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.exception("unhandled_exception", path=request.url.path, error=str(exc))
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
 def require_api_key(
-    x_api_key: str | None = Header(default=None), settings: Settings = Depends(get_settings)
+    x_api_key: str | None = Header(default=None), app_settings: Settings = Depends(get_settings)
 ) -> None:
-    if settings.environment == "development" and settings.api_key == "change-me":
+    if app_settings.environment == "development" and app_settings.api_key.startswith("change-me"):
         return
-    if x_api_key != settings.api_key:
+    if x_api_key != app_settings.api_key:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
 
 
 @app.get("/healthz", response_model=HealthResponse)
 def healthz() -> HealthResponse:
     return HealthResponse(status="ok", service="meeting-intelligence-api", version="0.1.0")
+
+
+@app.get("/readyz", response_model=HealthResponse)
+def readyz() -> HealthResponse:
+    return HealthResponse(status="ready", service="meeting-intelligence-api", version="0.1.0")
 
 
 @app.post(
@@ -95,6 +137,7 @@ def approve_commands(meeting_id: str, approval: ApprovalRequest) -> MeetingIntel
         if command.id in requested_ids:
             command.approval_status = ApprovalStatus.approved
     result.audit_events.append(f"commands.approved_by:{approval.approved_by}")
+    logger.info("commands_approved", meeting_id=meeting_id, approved_by=approval.approved_by)
     return result
 
 
@@ -112,4 +155,5 @@ def reject_commands(meeting_id: str, approval: ApprovalRequest) -> MeetingIntell
         if command.id in requested_ids:
             command.approval_status = ApprovalStatus.rejected
     result.audit_events.append(f"commands.rejected_by:{approval.approved_by}")
+    logger.info("commands_rejected", meeting_id=meeting_id, rejected_by=approval.approved_by)
     return result
