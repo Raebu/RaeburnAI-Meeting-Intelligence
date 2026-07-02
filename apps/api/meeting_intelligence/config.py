@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     environment: str = Field(default="development", alias="RAEBURN_ENV")
     api_key: str = Field(default="change-me", alias="RAEBURN_API_KEY")
     public_base_url: str = Field(default="http://localhost:3000", alias="RAEBURN_PUBLIC_BASE_URL")
+    cors_origins: str = Field(default="http://localhost:3000", alias="RAEBURN_CORS_ORIGINS")
+    rate_limit_per_minute: int = Field(default=60, alias="RAEBURN_RATE_LIMIT_PER_MINUTE")
     database_url: str = Field(
         default="postgresql+psycopg://raeburn:raeburn@localhost:5432/meeting_intelligence",
         alias="DATABASE_URL",
@@ -40,6 +42,10 @@ class Settings(BaseSettings):
     email_followup_enabled: bool = Field(default=False, alias="EMAIL_FOLLOWUP_ENABLED")
     webhook_writeback_enabled: bool = Field(default=False, alias="WEBHOOK_WRITEBACK_ENABLED")
     webhook_url: str | None = Field(default=None, alias="WEBHOOK_URL")
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
 @lru_cache(maxsize=1)
