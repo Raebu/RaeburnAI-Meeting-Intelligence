@@ -1,0 +1,14 @@
+{
+  "title": "Customer onboarding meeting",
+  "transcript": "We decided to launch the onboarding pilot next month. Sarah will create a Jira ticket for the onboarding workflow by Friday. Martin will follow up with the customer about the deal next week. Action: add the GitHub issue for the API webhook bug.",
+  "attendees": [
+    {"name": "Sarah", "email": "sarah@example.com", "role": "Delivery Lead"},
+    {"name": "Martin", "email": "martin@example.com", "role": "Account Owner", "github_username": "Raebu"}
+  ],
+  "context": {
+    "crm_account_id": "acct_123",
+    "crm_deal_id": "deal_456",
+    "project_key": "ONB",
+    "repository": "Raebu/example"
+  }
+}
