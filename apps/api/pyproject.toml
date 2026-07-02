@@ -13,7 +13,7 @@ dependencies = [
   "httpx==0.28.1",
   "tenacity==9.1.2",
   "python-dateutil==2.9.0.post0",
-  "structlog==25.4.0"
+  "structlog==26.1.0"
 ]
 
 [project.optional-dependencies]
