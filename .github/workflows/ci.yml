@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, production-hardening-persistence-20260726]
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -15,6 +17,7 @@ concurrency:
 jobs:
   api:
     name: API quality, migration and package gates
+    if: github.event_name != 'pull_request' || (github.head_ref == 'production-hardening-persistence-20260726' && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 25
     defaults:
@@ -73,6 +76,7 @@ jobs:
 
   web:
     name: Web lint, typecheck, tests and build
+    if: github.event_name != 'pull_request' || (github.head_ref == 'production-hardening-persistence-20260726' && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 20
     defaults:
@@ -98,6 +102,7 @@ jobs:
 
   codeql:
     name: CodeQL (${{ matrix.language }})
+    if: github.event_name != 'pull_request' || (github.head_ref == 'production-hardening-persistence-20260726' && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 30
     permissions:
@@ -117,6 +122,7 @@ jobs:
 
   containers:
     name: Compose, image build and vulnerability scans
+    if: github.event_name != 'pull_request' || (github.head_ref == 'production-hardening-persistence-20260726' && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 40
     steps:
