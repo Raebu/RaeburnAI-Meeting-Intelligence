@@ -1,5 +1,7 @@
 name: Hardening verification
 
+# This same-repository PR workflow exists only to obtain reviewable command evidence
+# for the named hardening branch without executing arbitrary fork code.
 on:
   pull_request:
     branches: [main]
