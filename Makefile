@@ -1,4 +1,4 @@
-.PHONY: install lint format format-check typecheck test build audit migration-up migration-down migration-check compose-check docker-build verify
+.PHONY: install lint format format-check typecheck test build audit security migration-up migration-down migration-check compose-check docker-build verify
 
 PYTHON ?= python
 
@@ -32,6 +32,9 @@ audit:
 	cd apps/api && pip-audit --skip-editable
 	cd apps/web && npm audit --audit-level=high
 
+security:
+	$(PYTHON) scripts/check_secrets.py
+
 migration-up:
 	cd apps/api && alembic upgrade head
 
@@ -50,4 +53,4 @@ compose-check:
 docker-build:
 	docker compose build
 
-verify: lint format-check typecheck test build audit migration-check compose-check docker-build
+verify: lint format-check typecheck test build audit security migration-check compose-check docker-build
