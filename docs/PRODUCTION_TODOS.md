@@ -11,6 +11,7 @@ This file deliberately records what is **not** complete. The repository has a ma
 - Non-root containers, private data services and least-privilege Compose settings.
 - Unit, integration and basic end-to-end approval tests.
 - Coverage, dependency audit, CodeQL, tracked-secret and image-scanning gates.
+- Branch-restricted verification is installed on `main`; command results must be green before this PR is merged.
 
 ## P0 — required before handling real enterprise customer data
 
