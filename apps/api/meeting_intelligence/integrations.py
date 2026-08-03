@@ -35,16 +35,26 @@ class GitHubIssueAdapter(IntegrationAdapter):
 
     async def dispatch(self, command: IntegrationCommand) -> DispatchResult:
         if not self.settings.github_writeback_enabled:
-            return DispatchResult(system=self.system, operation=command.operation, status="skipped", detail="disabled")
+            return DispatchResult(
+                system=self.system, operation=command.operation, status="skipped", detail="disabled"
+            )
         repository = command.payload.get("repository") or self.settings.github_default_repository
         if not repository or not self.settings.github_token:
-            return DispatchResult(system=self.system, operation=command.operation, status="failed", detail="missing config")
+            return DispatchResult(
+                system=self.system,
+                operation=command.operation,
+                status="failed",
+                detail="missing config",
+            )
         action = command.payload["action"]
         url = f"https://api.github.com/repos/{repository}/issues"
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.post(
                 url,
-                headers={"Authorization": f"Bearer {self.settings.github_token}", "Accept": "application/vnd.github+json"},
+                headers={
+                    "Authorization": f"Bearer {self.settings.github_token}",
+                    "Accept": "application/vnd.github+json",
+                },
                 json={"title": action["title"], "body": action["description"]},
             )
         response.raise_for_status()
@@ -66,22 +76,39 @@ class JiraAdapter(IntegrationAdapter):
 
     async def dispatch(self, command: IntegrationCommand) -> DispatchResult:
         if not self.settings.jira_writeback_enabled:
-            return DispatchResult(system=self.system, operation=command.operation, status="skipped", detail="disabled")
-        if not all([self.settings.jira_base_url, self.settings.jira_email, self.settings.jira_api_token, self.settings.jira_project_key]):
-            return DispatchResult(system=self.system, operation=command.operation, status="failed", detail="missing config")
+            return DispatchResult(
+                system=self.system, operation=command.operation, status="skipped", detail="disabled"
+            )
+        jira_base_url = self.settings.jira_base_url
+        jira_email = self.settings.jira_email
+        jira_api_token = self.settings.jira_api_token
+        jira_project_key = self.settings.jira_project_key
+        if not all([jira_base_url, jira_email, jira_api_token, jira_project_key]):
+            return DispatchResult(
+                system=self.system,
+                operation=command.operation,
+                status="failed",
+                detail="missing config",
+            )
+        assert jira_base_url and jira_email and jira_api_token and jira_project_key
         action = command.payload["action"]
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.post(
-                f"{self.settings.jira_base_url}/rest/api/3/issue",
-                auth=(self.settings.jira_email, self.settings.jira_api_token),
+                f"{jira_base_url}/rest/api/3/issue",
+                auth=(jira_email, jira_api_token),
                 json={
                     "fields": {
-                        "project": {"key": self.settings.jira_project_key},
+                        "project": {"key": jira_project_key},
                         "summary": action["title"],
                         "description": {
                             "type": "doc",
                             "version": 1,
-                            "content": [{"type": "paragraph", "content": [{"type": "text", "text": action["description"]}]}],
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "content": [{"type": "text", "text": action["description"]}],
+                                }
+                            ],
                         },
                         "issuetype": {"name": "Task"},
                     }
@@ -89,7 +116,12 @@ class JiraAdapter(IntegrationAdapter):
             )
         response.raise_for_status()
         payload = response.json()
-        return DispatchResult(system=self.system, operation=command.operation, external_id=payload.get("key"), status="dispatched")
+        return DispatchResult(
+            system=self.system,
+            operation=command.operation,
+            external_id=payload.get("key"),
+            status="dispatched",
+        )
 
 
 class WebhookAdapter(IntegrationAdapter):
@@ -100,8 +132,12 @@ class WebhookAdapter(IntegrationAdapter):
 
     async def dispatch(self, command: IntegrationCommand) -> DispatchResult:
         if not self.settings.webhook_writeback_enabled or not self.settings.webhook_url:
-            return DispatchResult(system=self.system, operation=command.operation, status="skipped", detail="disabled")
+            return DispatchResult(
+                system=self.system, operation=command.operation, status="skipped", detail="disabled"
+            )
         async with httpx.AsyncClient(timeout=20) as client:
-            response = await client.post(self.settings.webhook_url, json=command.model_dump(mode="json"))
+            response = await client.post(
+                self.settings.webhook_url, json=command.model_dump(mode="json")
+            )
         response.raise_for_status()
         return DispatchResult(system=self.system, operation=command.operation, status="dispatched")

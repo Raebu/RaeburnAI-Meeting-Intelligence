@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -8,6 +9,7 @@ from dateutil.parser import parse as parse_datetime
 
 from meeting_intelligence.schemas import (
     ActionItem,
+    Attendee,
     CrmUpdate,
     Decision,
     FollowUp,
@@ -44,9 +46,10 @@ class ExtractionSignals:
 class MeetingIntelligenceEngine:
     """Extraction engine with deterministic fallback.
 
-    The deterministic extractor makes the product useful in development, tests and private deployments
-    without sending transcripts to a third-party LLM. Production deployments can wrap this class with an
-    LLM adapter and keep the same output contract.
+    The deterministic extractor makes the product useful in development, tests
+    and private deployments without sending transcripts to a third-party LLM.
+    Production deployments can wrap this class with an LLM adapter and keep the
+    same output contract.
     """
 
     def __init__(self, signals: ExtractionSignals | None = None) -> None:
@@ -121,12 +124,12 @@ class MeetingIntelligenceEngine:
         return actions
 
     def _infer_owner(
-        self, sentence: str, attendee_lookup: dict[str, object]
+        self, sentence: str, attendee_lookup: Mapping[str, Attendee]
     ) -> tuple[str | None, str | None]:
         lowered = sentence.lower()
         for name, attendee in attendee_lookup.items():
             if name in lowered:
-                return getattr(attendee, "name"), getattr(attendee, "email")
+                return attendee.name, attendee.email
         match = re.search(r"\b([A-Z][a-z]+)\b\s+(?:will|to|can|should|needs)", sentence)
         if match:
             return match.group(1), None
@@ -140,7 +143,9 @@ class MeetingIntelligenceEngine:
             return occurred_at + timedelta(days=7)
         if "friday" in lowered:
             return occurred_at + timedelta(days=(4 - occurred_at.weekday()) % 7 or 7)
-        date_match = re.search(r"\b(?:by|on|before)\s+([A-Za-z]+\s+\d{1,2}(?:,\s*\d{4})?)", sentence)
+        date_match = re.search(
+            r"\b(?:by|on|before)\s+([A-Za-z]+\s+\d{1,2}(?:,\s*\d{4})?)", sentence
+        )
         if date_match:
             try:
                 return parse_datetime(date_match.group(1), default=occurred_at)
@@ -177,7 +182,11 @@ class MeetingIntelligenceEngine:
         if not request.context.crm_account_id and not request.context.crm_deal_id:
             return None
         next_step = actions[0].title if actions else None
-        risk = "No owner assigned to at least one action." if any(a.owner is None for a in actions) else None
+        risk = (
+            "No owner assigned to at least one action."
+            if any(a.owner is None for a in actions)
+            else None
+        )
         return CrmUpdate(
             account_id=request.context.crm_account_id,
             deal_id=request.context.crm_deal_id,
@@ -194,10 +203,16 @@ class MeetingIntelligenceEngine:
         self, request: MeetingAnalyseRequest, decisions: list[Decision], actions: list[ActionItem]
     ) -> FollowUp:
         recipients = [attendee.email for attendee in request.attendees if attendee.email]
-        decision_lines = "\n".join(f"- {decision.statement}" for decision in decisions) or "- No explicit decisions detected."
-        action_lines = "\n".join(
-            f"- {action.title} — owner: {action.owner or 'Unassigned'}" for action in actions
-        ) or "- No explicit actions detected."
+        decision_lines = (
+            "\n".join(f"- {decision.statement}" for decision in decisions)
+            or "- No explicit decisions detected."
+        )
+        action_lines = (
+            "\n".join(
+                f"- {action.title} — owner: {action.owner or 'Unassigned'}" for action in actions
+            )
+            or "- No explicit actions detected."
+        )
         body = (
             f"Thanks for joining {request.title}.\n\n"
             f"Decisions\n{decision_lines}\n\n"
@@ -221,8 +236,13 @@ class MeetingIntelligenceEngine:
                 commands.append(
                     IntegrationCommand(
                         system=system,
-                        operation="create_task" if system in {"github", "jira"} else "update_record",
-                        payload={"meeting_id": request.meeting_id, "action": action.model_dump(mode="json")},
+                        operation="create_task"
+                        if system in {"github", "jira"}
+                        else "update_record",
+                        payload={
+                            "meeting_id": request.meeting_id,
+                            "action": action.model_dump(mode="json"),
+                        },
                     )
                 )
         if crm_update:

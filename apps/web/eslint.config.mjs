@@ -1,5 +1,5 @@
-import nextVitals from 'eslint-config-next/core-web-vitals';
+import nextPlugin from '@next/eslint-plugin-next';
 
-const eslintConfig = [...nextVitals];
+const eslintConfig = [nextPlugin.flatConfig.coreWebVitals];
 
 export default eslintConfig;

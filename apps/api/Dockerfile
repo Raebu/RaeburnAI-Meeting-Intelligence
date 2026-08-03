@@ -8,9 +8,10 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
 COPY apps/api/pyproject.toml ./pyproject.toml
+COPY apps/api/requirements.lock ./requirements.lock
 COPY apps/api/meeting_intelligence ./meeting_intelligence
 
-RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir --require-hashes -r requirements.lock && pip install --no-cache-dir --no-deps -e .
 
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD curl -f http://localhost:8080/healthz || exit 1

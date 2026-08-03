@@ -1,7 +1,7 @@
 name: Hardening verification
 
-# Executes only for the named same-repository hardening branch. This prevents
-# arbitrary fork or branch code from reaching the verification runner.
+# Executes for same-repository pull requests; fork code is excluded from the
+# privileged hardening jobs by the repository check.
 on:
   pull_request:
     branches: [main]
@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   api:
-    if: github.head_ref == 'production-hardening-persistence-20260726' && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     defaults:
@@ -34,7 +34,8 @@ jobs:
         with:
           python-version: "3.12.13"
           cache: pip
-      - run: python -m pip install -e '.[dev]'
+      - run: python -m pip install --require-hashes -r requirements-dev.lock
+      - run: python -m pip install --no-deps -e .
       - run: ruff check .
       - run: ruff format --check .
       - run: mypy meeting_intelligence
@@ -58,7 +59,7 @@ jobs:
         run: python scripts/check_secrets.py
 
   web:
-    if: github.head_ref == 'production-hardening-persistence-20260726' && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     defaults:
@@ -70,7 +71,7 @@ jobs:
         with:
           node-version: "22.17.1"
           package-manager-cache: false
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
@@ -78,7 +79,7 @@ jobs:
       - run: npm audit --audit-level=high
 
   containers:
-    if: github.head_ref == 'production-hardening-persistence-20260726' && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
