@@ -119,7 +119,9 @@ def analyse_meeting(request: MeetingAnalyseRequest) -> MeetingIntelligenceResult
 def get_meeting_result(meeting_id: str) -> MeetingIntelligenceResult:
     result = _results.get(meeting_id)
     if not result:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting result not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Meeting result not found"
+        )
     return result
 
 
@@ -131,7 +133,9 @@ def get_meeting_result(meeting_id: str) -> MeetingIntelligenceResult:
 def approve_commands(meeting_id: str, approval: ApprovalRequest) -> MeetingIntelligenceResult:
     result = _results.get(meeting_id)
     if not result:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting result not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Meeting result not found"
+        )
     requested_ids: set[UUID] = set(approval.command_ids)
     for command in result.integration_commands:
         if command.id in requested_ids:
@@ -149,7 +153,9 @@ def approve_commands(meeting_id: str, approval: ApprovalRequest) -> MeetingIntel
 def reject_commands(meeting_id: str, approval: ApprovalRequest) -> MeetingIntelligenceResult:
     result = _results.get(meeting_id)
     if not result:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting result not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Meeting result not found"
+        )
     requested_ids: set[UUID] = set(approval.command_ids)
     for command in result.integration_commands:
         if command.id in requested_ids:

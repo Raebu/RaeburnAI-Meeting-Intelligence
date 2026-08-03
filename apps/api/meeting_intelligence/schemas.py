@@ -22,29 +22,31 @@ class ApprovalStatus(StrEnum):
 
 
 class Attendee(BaseModel):
-    name: str
-    email: str | None = None
-    role: str | None = None
-    crm_contact_id: str | None = None
-    github_username: str | None = None
-    jira_account_id: str | None = None
+    name: str = Field(min_length=1, max_length=160)
+    email: str | None = Field(default=None, max_length=320)
+    role: str | None = Field(default=None, max_length=160)
+    crm_contact_id: str | None = Field(default=None, max_length=160)
+    github_username: str | None = Field(default=None, max_length=100)
+    jira_account_id: str | None = Field(default=None, max_length=160)
 
 
 class MeetingContext(BaseModel):
     crm_account_id: str | None = None
     crm_deal_id: str | None = None
     project_key: str | None = None
-    repository: str | None = Field(default=None, description="owner/repo GitHub repository")
+    repository: str | None = Field(
+        default=None, max_length=200, description="owner/repo GitHub repository"
+    )
     source_url: HttpUrl | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict, max_length=50)
 
 
 class MeetingAnalyseRequest(BaseModel):
-    meeting_id: str = Field(default_factory=lambda: str(uuid4()))
-    title: str
+    meeting_id: str = Field(default_factory=lambda: str(uuid4()), min_length=1, max_length=160)
+    title: str = Field(min_length=1, max_length=240)
     occurred_at: datetime = Field(default_factory=datetime.utcnow)
-    transcript: str = Field(min_length=1)
-    attendees: list[Attendee] = Field(default_factory=list)
+    transcript: str = Field(min_length=1, max_length=200_000)
+    attendees: list[Attendee] = Field(default_factory=list, max_length=200)
     context: MeetingContext = Field(default_factory=MeetingContext)
     require_approval: bool | None = None
 

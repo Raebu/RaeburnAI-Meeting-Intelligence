@@ -16,7 +16,9 @@ def test_analyse_meeting_end_to_end() -> None:
         json={
             "meeting_id": "test-meeting-1",
             "title": "Implementation meeting",
-            "transcript": "We decided to use GitHub Issues. Sarah will create the GitHub issue by Friday.",
+            "transcript": (
+                "We decided to use GitHub Issues. Sarah will create the GitHub issue by Friday."
+            ),
             "attendees": [{"name": "Sarah", "email": "sarah@example.com"}],
             "context": {"repository": "Raebu/example"},
         },
@@ -32,3 +34,13 @@ def test_analyse_meeting_end_to_end() -> None:
     get_response = client.get("/v1/meetings/test-meeting-1")
     assert get_response.status_code == 200
     assert get_response.json()["meeting_id"] == "test-meeting-1"
+
+
+def test_analyse_rejects_oversized_transcript() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/v1/meetings/analyse",
+        json={"title": "Too large", "transcript": "x" * 200_001},
+    )
+
+    assert response.status_code == 422
