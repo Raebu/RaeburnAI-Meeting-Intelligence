@@ -18,6 +18,11 @@ jobs:
     defaults:
       run:
         working-directory: apps/api
+    env:
+      RAEBURN_ENV: test
+      DATABASE_URL: sqlite:///./meeting-intelligence-ci.db
+      RAEBURN_API_KEY: test-only-api-key
+      RAEBURN_PUBLIC_BASE_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
