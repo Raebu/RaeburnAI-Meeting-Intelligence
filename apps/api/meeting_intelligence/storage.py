@@ -37,7 +37,9 @@ class MeetingResultStore:
         self._environment = settings.environment
 
     def bootstrap_development_schema(self) -> None:
-        if self._environment == "development":
+        # Production schema changes are always explicit migrations. Development
+        # and test environments may bootstrap disposable local databases.
+        if self._environment in {"development", "test"}:
             Base.metadata.create_all(self._engine)
 
     def ready(self) -> bool:
