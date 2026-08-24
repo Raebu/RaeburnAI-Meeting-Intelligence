@@ -67,16 +67,20 @@ class JiraAdapter(IntegrationAdapter):
     async def dispatch(self, command: IntegrationCommand) -> DispatchResult:
         if not self.settings.jira_writeback_enabled:
             return DispatchResult(system=self.system, operation=command.operation, status="skipped", detail="disabled")
-        if not all([self.settings.jira_base_url, self.settings.jira_email, self.settings.jira_api_token, self.settings.jira_project_key]):
+        jira_base_url = self.settings.jira_base_url
+        jira_email = self.settings.jira_email
+        jira_api_token = self.settings.jira_api_token
+        jira_project_key = self.settings.jira_project_key
+        if not jira_base_url or not jira_email or not jira_api_token or not jira_project_key:
             return DispatchResult(system=self.system, operation=command.operation, status="failed", detail="missing config")
         action = command.payload["action"]
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.post(
-                f"{self.settings.jira_base_url}/rest/api/3/issue",
-                auth=(self.settings.jira_email, self.settings.jira_api_token),
+                f"{jira_base_url}/rest/api/3/issue",
+                auth=(jira_email, jira_api_token),
                 json={
                     "fields": {
-                        "project": {"key": self.settings.jira_project_key},
+                        "project": {"key": jira_project_key},
                         "summary": action["title"],
                         "description": {
                             "type": "doc",
