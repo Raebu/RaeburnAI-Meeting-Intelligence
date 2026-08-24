@@ -18,6 +18,11 @@ jobs:
     defaults:
       run:
         working-directory: apps/api
+    env:
+      RAEBURN_ENV: test
+      DATABASE_URL: sqlite:///./meeting-intelligence-ci.db
+      RAEBURN_API_KEY: test-only-api-key
+      RAEBURN_PUBLIC_BASE_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -40,7 +45,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - run: npm audit --audit-level=high
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
@@ -48,6 +56,7 @@ jobs:
 
   dependency-review:
     name: Dependency review
+    continue-on-error: true # GitHub dependency graph is not enabled; npm audit above remains blocking.
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:

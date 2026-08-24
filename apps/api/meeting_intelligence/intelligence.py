@@ -97,7 +97,9 @@ class MeetingIntelligenceEngine:
     def _extract_actions(
         self, sentences: list[str], request: MeetingAnalyseRequest
     ) -> list[ActionItem]:
-        attendee_lookup = {attendee.name.lower(): attendee for attendee in request.attendees}
+        attendee_lookup: dict[str, object] = {
+            attendee.name.lower(): attendee for attendee in request.attendees
+        }
         actions: list[ActionItem] = []
         for sentence in sentences:
             lowered = sentence.lower()
