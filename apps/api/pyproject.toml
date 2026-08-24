@@ -28,6 +28,10 @@ dev = [
 [project.scripts]
 meeting-intelligence-api = "meeting_intelligence.main:app"
 
+[tool.setuptools.packages.find]
+include = ["meeting_intelligence*"]
+exclude = ["migrations*", "tests*"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"
