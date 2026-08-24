@@ -19,12 +19,13 @@ from meeting_intelligence.schemas import (
     MeetingAnalyseRequest,
     MeetingIntelligenceResult,
 )
+from meeting_intelligence.storage import MeetingResultStore
 
 logger = structlog.get_logger(__name__)
 settings = get_settings()
 app = FastAPI(
     title="RaeburnAI Meeting Intelligence API",
-    version="0.1.0",
+    version="0.2.0",
     description="Meeting intelligence API for decisions, actions, owners and workflow writebacks.",
 )
 app.add_middleware(
@@ -36,7 +37,8 @@ app.add_middleware(
 )
 
 _engine = MeetingIntelligenceEngine()
-_results: dict[str, MeetingIntelligenceResult] = {}
+_store = MeetingResultStore(settings)
+_store.bootstrap_development_schema()
 _rate_window: dict[str, deque[float]] = defaultdict(deque)
 
 
@@ -80,12 +82,17 @@ def require_api_key(
 
 @app.get("/healthz", response_model=HealthResponse)
 def healthz() -> HealthResponse:
-    return HealthResponse(status="ok", service="meeting-intelligence-api", version="0.1.0")
+    return HealthResponse(status="ok", service="meeting-intelligence-api", version="0.2.0")
 
 
 @app.get("/readyz", response_model=HealthResponse)
 def readyz() -> HealthResponse:
-    return HealthResponse(status="ready", service="meeting-intelligence-api", version="0.1.0")
+    if not _store.ready():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Persistence layer is not ready; run the production migration and verify DATABASE_URL",
+        )
+    return HealthResponse(status="ready", service="meeting-intelligence-api", version="0.2.0")
 
 
 @app.post(
@@ -101,7 +108,7 @@ def analyse_meeting(request: MeetingAnalyseRequest) -> MeetingIntelligenceResult
     if not require_approval:
         for command in result.integration_commands:
             command.approval_status = ApprovalStatus.approved
-    _results[request.meeting_id] = result
+    _store.put(request.meeting_id, result)
     logger.info(
         "meeting_analyzed",
         meeting_id=request.meeting_id,
@@ -117,7 +124,7 @@ def analyse_meeting(request: MeetingAnalyseRequest) -> MeetingIntelligenceResult
     dependencies=[Depends(require_api_key)],
 )
 def get_meeting_result(meeting_id: str) -> MeetingIntelligenceResult:
-    result = _results.get(meeting_id)
+    result = _store.get(meeting_id)
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting result not found")
     return result
@@ -129,7 +136,7 @@ def get_meeting_result(meeting_id: str) -> MeetingIntelligenceResult:
     dependencies=[Depends(require_api_key)],
 )
 def approve_commands(meeting_id: str, approval: ApprovalRequest) -> MeetingIntelligenceResult:
-    result = _results.get(meeting_id)
+    result = _store.get(meeting_id)
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting result not found")
     requested_ids: set[UUID] = set(approval.command_ids)
@@ -137,6 +144,7 @@ def approve_commands(meeting_id: str, approval: ApprovalRequest) -> MeetingIntel
         if command.id in requested_ids:
             command.approval_status = ApprovalStatus.approved
     result.audit_events.append(f"commands.approved_by:{approval.approved_by}")
+    _store.put(meeting_id, result)
     logger.info("commands_approved", meeting_id=meeting_id, approved_by=approval.approved_by)
     return result
 
@@ -147,7 +155,7 @@ def approve_commands(meeting_id: str, approval: ApprovalRequest) -> MeetingIntel
     dependencies=[Depends(require_api_key)],
 )
 def reject_commands(meeting_id: str, approval: ApprovalRequest) -> MeetingIntelligenceResult:
-    result = _results.get(meeting_id)
+    result = _store.get(meeting_id)
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting result not found")
     requested_ids: set[UUID] = set(approval.command_ids)
@@ -155,5 +163,6 @@ def reject_commands(meeting_id: str, approval: ApprovalRequest) -> MeetingIntell
         if command.id in requested_ids:
             command.approval_status = ApprovalStatus.rejected
     result.audit_events.append(f"commands.rejected_by:{approval.approved_by}")
+    _store.put(meeting_id, result)
     logger.info("commands_rejected", meeting_id=meeting_id, rejected_by=approval.approved_by)
     return result
