@@ -1,6 +1,7 @@
 # RaeburnAI Meeting Intelligence
 
 [![CI](https://github.com/Raebu/RaeburnAI-Meeting-Intelligence/actions/workflows/ci.yml/badge.svg)](https://github.com/Raebu/RaeburnAI-Meeting-Intelligence/actions/workflows/ci.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/Raebu/RaeburnAI-Meeting-Intelligence/badge)](https://securityscorecards.dev/viewer/?uri=github.com/Raebu/RaeburnAI-Meeting-Intelligence)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-production--foundation-brightgreen.svg)](docs/PRODUCTION_TODOS.md)
 
@@ -70,7 +71,7 @@ apps/api        FastAPI service, schemas, extraction engine and approval endpoin
 apps/web        Next.js dashboard shell
 packages/sdk    Python SDK client
 docs            architecture, deployment, screenshots and production TODOs
-.github         CI, CodeQL and dependency review
+.github         CI, CodeQL, dependency review and OpenSSF Scorecard
 ```
 
 Core workflow:
@@ -180,6 +181,7 @@ client = MeetingIntelligenceClient('http://localhost:8080')
 - Audit events are created for analysis, approval and rejection actions.
 - Secrets belong in environment variables or a secret manager, never source control.
 - Deterministic mode allows private/local use without sending transcripts to third-party LLMs.
+- OpenSSF Scorecard runs automatically and publishes repository-level security health results; it is an automated project assessment, not a corporate security certification.
 
 See [SECURITY.md](SECURITY.md) and [Production TODOs](docs/PRODUCTION_TODOS.md).
 
@@ -195,7 +197,7 @@ Included:
 - Next.js dashboard shell.
 - Python SDK.
 - Dockerfiles and Docker Compose.
-- CI with linting, type checking, tests, Docker build, CodeQL and dependency review.
+- CI with linting, type checking, tests, Docker build, CodeQL, dependency review and OpenSSF Scorecard.
 - Unit, integration and smoke tests.
 - Deployment, architecture, security and screenshot documentation.
 
