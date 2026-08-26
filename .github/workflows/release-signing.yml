@@ -1,0 +1,54 @@
+name: Sign Release Assets
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  sign-release:
+    name: Sign release trust package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          persist-credentials: false
+      - name: Install cosign
+        uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+      - name: Build release archive
+        run: tar --exclude='.git' -czf "${{ github.event.repository.name }}-${{ github.event.release.tag_name }}.tar.gz" .
+      - name: Generate SPDX SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
+        with:
+          path: .
+          format: spdx-json
+          output-file: sbom.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - name: Generate CycloneDX SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - name: Generate SHA-256 checksums
+        run: sha256sum "${{ github.event.repository.name }}-${{ github.event.release.tag_name }}.tar.gz" sbom.spdx.json sbom.cdx.json > SHA256SUMS
+      - name: Keyless-sign release archive
+        run: cosign sign-blob --yes --bundle release.tar.gz.sigstore "${{ github.event.repository.name }}-${{ github.event.release.tag_name }}.tar.gz"
+      - name: Keyless-sign checksums
+        run: cosign sign-blob --yes --bundle SHA256SUMS.sigstore SHA256SUMS
+      - name: Keyless-sign SPDX SBOM
+        run: cosign sign-blob --yes --bundle sbom.spdx.json.sigstore sbom.spdx.json
+      - name: Keyless-sign CycloneDX SBOM
+        run: cosign sign-blob --yes --bundle sbom.cdx.json.sigstore sbom.cdx.json
+      - name: Publish signed trust package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" "${{ github.event.repository.name }}-${{ github.event.release.tag_name }}.tar.gz" SHA256SUMS sbom.spdx.json sbom.cdx.json release.tar.gz.sigstore SHA256SUMS.sigstore sbom.spdx.json.sigstore sbom.cdx.json.sigstore --clobber
