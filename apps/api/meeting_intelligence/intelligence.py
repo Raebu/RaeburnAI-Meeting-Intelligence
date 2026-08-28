@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -8,6 +9,7 @@ from dateutil.parser import parse as parse_datetime
 
 from meeting_intelligence.schemas import (
     ActionItem,
+    Attendee,
     CrmUpdate,
     Decision,
     FollowUp,
@@ -121,12 +123,12 @@ class MeetingIntelligenceEngine:
         return actions
 
     def _infer_owner(
-        self, sentence: str, attendee_lookup: dict[str, object]
+        self, sentence: str, attendee_lookup: Mapping[str, Attendee]
     ) -> tuple[str | None, str | None]:
         lowered = sentence.lower()
         for name, attendee in attendee_lookup.items():
             if name in lowered:
-                return attendee.name, attendee.email  # type: ignore[attr-defined]
+                return attendee.name, attendee.email
         match = re.search(r"\b([A-Z][a-z]+)\b\s+(?:will|to|can|should|needs)", sentence)
         if match:
             return match.group(1), None
