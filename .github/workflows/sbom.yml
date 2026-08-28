@@ -27,14 +27,17 @@ on:
       - '**/Dockerfile*'
 
 permissions:
-  contents: write
+  contents: read
   actions: read
-  id-token: write
-  attestations: write
 
 jobs:
   sbom:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
