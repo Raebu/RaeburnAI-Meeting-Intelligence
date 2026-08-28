@@ -48,7 +48,7 @@ jobs:
           alembic upgrade head
       - name: Unit, integration and E2E tests
         env:
-          DATABASE_URL: sqlite+pysqlite:///:memory:
+          DATABASE_URL: "sqlite+pysqlite:///:memory:"
           AUTO_CREATE_SCHEMA: "true"
         run: pytest
       - run: python -m build
