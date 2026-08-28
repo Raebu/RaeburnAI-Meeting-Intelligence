@@ -126,7 +126,7 @@ class MeetingIntelligenceEngine:
         lowered = sentence.lower()
         for name, attendee in attendee_lookup.items():
             if name in lowered:
-                return getattr(attendee, "name"), getattr(attendee, "email")
+                return attendee.name, attendee.email  # type: ignore[attr-defined]
         match = re.search(r"\b([A-Z][a-z]+)\b\s+(?:will|to|can|should|needs)", sentence)
         if match:
             return match.group(1), None
