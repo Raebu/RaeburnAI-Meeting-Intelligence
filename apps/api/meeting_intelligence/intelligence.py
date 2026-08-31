@@ -46,9 +46,10 @@ class ExtractionSignals:
 class MeetingIntelligenceEngine:
     """Extraction engine with deterministic fallback.
 
-    The deterministic extractor makes the product useful in development, tests and private deployments
-    without sending transcripts to a third-party LLM. Production deployments can wrap this class with an
-    LLM adapter and keep the same output contract.
+    The deterministic extractor makes the product useful in development, tests
+    and private deployments without sending transcripts to a third-party LLM.
+    Production deployments can wrap this class with an LLM adapter and keep the
+    same output contract.
     """
 
     def __init__(self, signals: ExtractionSignals | None = None) -> None:
@@ -60,7 +61,9 @@ class MeetingIntelligenceEngine:
         actions = self._extract_actions(sentences, request)
         crm_update = self._build_crm_update(request, decisions, actions)
         follow_up = self._build_follow_up(request, decisions, actions)
-        commands = self._build_integration_commands(request, actions, crm_update, follow_up)
+        commands = self._build_integration_commands(
+            request, actions, crm_update, follow_up
+        )
 
         return MeetingIntelligenceResult(
             meeting_id=request.meeting_id,
@@ -99,7 +102,9 @@ class MeetingIntelligenceEngine:
     def _extract_actions(
         self, sentences: list[str], request: MeetingAnalyseRequest
     ) -> list[ActionItem]:
-        attendee_lookup = {attendee.name.lower(): attendee for attendee in request.attendees}
+        attendee_lookup = {
+            attendee.name.lower(): attendee for attendee in request.attendees
+        }
         actions: list[ActionItem] = []
         for sentence in sentences:
             lowered = sentence.lower()
@@ -129,7 +134,9 @@ class MeetingIntelligenceEngine:
         for name, attendee in attendee_lookup.items():
             if name in lowered:
                 return attendee.name, attendee.email
-        match = re.search(r"\b([A-Z][a-z]+)\b\s+(?:will|to|can|should|needs)", sentence)
+        match = re.search(
+            r"\b([A-Z][a-z]+)\b\s+(?:will|to|can|should|needs)", sentence
+        )
         if match:
             return match.group(1), None
         return None, None
@@ -142,7 +149,9 @@ class MeetingIntelligenceEngine:
             return occurred_at + timedelta(days=7)
         if "friday" in lowered:
             return occurred_at + timedelta(days=(4 - occurred_at.weekday()) % 7 or 7)
-        date_match = re.search(r"\b(?:by|on|before)\s+([A-Za-z]+\s+\d{1,2}(?:,\s*\d{4})?)", sentence)
+        date_match = re.search(
+            r"\b(?:by|on|before)\s+([A-Za-z]+\s+\d{1,2}(?:,\s*\d{4})?)", sentence
+        )
         if date_match:
             try:
                 return parse_datetime(date_match.group(1), default=occurred_at)
@@ -152,7 +161,9 @@ class MeetingIntelligenceEngine:
 
     def _infer_priority(self, sentence: str) -> Priority:
         lowered = sentence.lower()
-        if any(word in lowered for word in ("urgent", "critical", "blocked", "escalate")):
+        if any(
+            word in lowered for word in ("urgent", "critical", "blocked", "escalate")
+        ):
             return Priority.critical
         if any(word in lowered for word in ("important", "high priority", "risk")):
             return Priority.high
@@ -163,23 +174,35 @@ class MeetingIntelligenceEngine:
     def _suggest_systems(self, sentence: str) -> list[str]:
         lowered = sentence.lower()
         systems: list[str] = []
-        if any(word in lowered for word in ("bug", "issue", "repo", "github", "pull request")):
+        if any(
+            word in lowered
+            for word in ("bug", "issue", "repo", "github", "pull request")
+        ):
             systems.append("github")
         if any(word in lowered for word in ("jira", "sprint", "ticket", "backlog")):
             systems.append("jira")
-        if any(word in lowered for word in ("customer", "deal", "crm", "account", "lead")):
+        if any(
+            word in lowered for word in ("customer", "deal", "crm", "account", "lead")
+        ):
             systems.append("crm")
         if "follow up" in lowered or "email" in lowered:
             systems.append("email")
         return systems or ["task"]
 
     def _build_crm_update(
-        self, request: MeetingAnalyseRequest, decisions: list[Decision], actions: list[ActionItem]
+        self,
+        request: MeetingAnalyseRequest,
+        decisions: list[Decision],
+        actions: list[ActionItem],
     ) -> CrmUpdate | None:
         if not request.context.crm_account_id and not request.context.crm_deal_id:
             return None
         next_step = actions[0].title if actions else None
-        risk = "No owner assigned to at least one action." if any(a.owner is None for a in actions) else None
+        risk = (
+            "No owner assigned to at least one action."
+            if any(action.owner is None for action in actions)
+            else None
+        )
         return CrmUpdate(
             account_id=request.context.crm_account_id,
             deal_id=request.context.crm_deal_id,
@@ -193,20 +216,35 @@ class MeetingIntelligenceEngine:
         )
 
     def _build_follow_up(
-        self, request: MeetingAnalyseRequest, decisions: list[Decision], actions: list[ActionItem]
+        self,
+        request: MeetingAnalyseRequest,
+        decisions: list[Decision],
+        actions: list[ActionItem],
     ) -> FollowUp:
-        recipients = [attendee.email for attendee in request.attendees if attendee.email]
-        decision_lines = "\n".join(f"- {decision.statement}" for decision in decisions) or "- No explicit decisions detected."
-        action_lines = "\n".join(
-            f"- {action.title} — owner: {action.owner or 'Unassigned'}" for action in actions
-        ) or "- No explicit actions detected."
+        recipients = [
+            attendee.email for attendee in request.attendees if attendee.email
+        ]
+        decision_lines = (
+            "\n".join(f"- {decision.statement}" for decision in decisions)
+            or "- No explicit decisions detected."
+        )
+        action_lines = (
+            "\n".join(
+                f"- {action.title} — owner: {action.owner or 'Unassigned'}"
+                for action in actions
+            )
+            or "- No explicit actions detected."
+        )
         body = (
             f"Thanks for joining {request.title}.\n\n"
             f"Decisions\n{decision_lines}\n\n"
             f"Actions\n{action_lines}\n\n"
-            "Please reply with any corrections before these are pushed into connected systems."
+            "Please reply with any corrections before these are pushed into "
+            "connected systems."
         )
-        return FollowUp(subject=f"Follow-up: {request.title}", body=body, recipients=recipients)
+        return FollowUp(
+            subject=f"Follow-up: {request.title}", body=body, recipients=recipients
+        )
 
     def _build_integration_commands(
         self,
@@ -223,8 +261,15 @@ class MeetingIntelligenceEngine:
                 commands.append(
                     IntegrationCommand(
                         system=system,
-                        operation="create_task" if system in {"github", "jira"} else "update_record",
-                        payload={"meeting_id": request.meeting_id, "action": action.model_dump(mode="json")},
+                        operation=(
+                            "create_task"
+                            if system in {"github", "jira"}
+                            else "update_record"
+                        ),
+                        payload={
+                            "meeting_id": request.meeting_id,
+                            "action": action.model_dump(mode="json"),
+                        },
                     )
                 )
         if crm_update:
@@ -249,4 +294,9 @@ class MeetingIntelligenceEngine:
         return clean[:90].rstrip(" .")
 
     def _clean_marker(self, sentence: str) -> str:
-        return re.sub(r"^(decision|action|todo|next step)\s*:\s*", "", sentence.strip(), flags=re.I)
+        return re.sub(
+            r"^(decision|action|todo|next step)\s*:\s*",
+            "",
+            sentence.strip(),
+            flags=re.I,
+        )
