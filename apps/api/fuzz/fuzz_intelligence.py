@@ -5,7 +5,11 @@ import atheris
 
 with atheris.instrument_imports():
     from meeting_intelligence.intelligence import MeetingIntelligenceEngine
-    from meeting_intelligence.schemas import Attendee, MeetingAnalyseRequest, MeetingContext
+    from meeting_intelligence.schemas import (
+        Attendee,
+        MeetingAnalyseRequest,
+        MeetingContext,
+    )
 
 
 engine = MeetingIntelligenceEngine()
