@@ -54,9 +54,7 @@ async def rate_limit_and_audit(
         window.popleft()
     if len(window) >= settings.rate_limit_per_minute:
         logger.warning("rate_limit_exceeded", client=client, path=request.url.path)
-        return JSONResponse(
-            status_code=429, content={"detail": "Rate limit exceeded"}
-        )
+        return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"})
     window.append(now)
     response = await call_next(request)
     logger.info(
@@ -69,22 +67,17 @@ async def rate_limit_and_audit(
 
 
 @app.exception_handler(Exception)
-async def unhandled_exception_handler(
-    request: Request, exc: Exception
-) -> JSONResponse:
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     logger.exception("unhandled_exception", path=request.url.path, error=str(exc))
-    return JSONResponse(
-        status_code=500, content={"detail": "Internal server error"}
-    )
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
 def require_api_key(
     x_api_key: str | None = Header(default=None),
     app_settings: Settings = Depends(get_settings),
 ) -> None:
-    if (
-        app_settings.environment == "development"
-        and app_settings.api_key.startswith("change-me")
+    if app_settings.environment == "development" and app_settings.api_key.startswith(
+        "change-me"
     ):
         return
     if x_api_key != app_settings.api_key:
