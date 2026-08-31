@@ -20,9 +20,7 @@ def test_analyse_meeting_end_to_end() -> None:
                 "We decided to use GitHub Issues. Sarah will create the GitHub "
                 "issue by Friday."
             ),
-            "attendees": [
-                {"name": "Sarah", "email": "sarah@example.com"}
-            ],
+            "attendees": [{"name": "Sarah", "email": "sarah@example.com"}],
             "context": {"repository": "Raebu/example"},
         },
     )
