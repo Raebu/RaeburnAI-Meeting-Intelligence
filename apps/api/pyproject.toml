@@ -44,7 +44,9 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "S"]
-ignore = ["S101", "B008"]
+# Ruff's formatter can intentionally retain some overlong constructs; E501 is
+# therefore incompatible with formatter-as-source-of-truth style enforcement.
+ignore = ["S101", "B008", "E501"]
 
 [tool.mypy]
 python_version = "3.11"
