@@ -1,7 +1,11 @@
 from datetime import datetime
 
 from meeting_intelligence.intelligence import MeetingIntelligenceEngine
-from meeting_intelligence.schemas import Attendee, MeetingAnalyseRequest, MeetingContext
+from meeting_intelligence.schemas import (
+    Attendee,
+    MeetingAnalyseRequest,
+    MeetingContext,
+)
 
 
 def test_extracts_decisions_actions_and_commands() -> None:
@@ -9,8 +13,15 @@ def test_extracts_decisions_actions_and_commands() -> None:
     request = MeetingAnalyseRequest(
         title="Customer implementation call",
         occurred_at=datetime(2026, 7, 2, 10, 0, 0),
-        attendees=[Attendee(name="Sarah", email="sarah@example.com"), Attendee(name="Martin", email="martin@example.com")],
-        context=MeetingContext(crm_account_id="acct_123", crm_deal_id="deal_456", repository="Raebu/example"),
+        attendees=[
+            Attendee(name="Sarah", email="sarah@example.com"),
+            Attendee(name="Martin", email="martin@example.com"),
+        ],
+        context=MeetingContext(
+            crm_account_id="acct_123",
+            crm_deal_id="deal_456",
+            repository="Raebu/example",
+        ),
         transcript=(
             "We decided to go with the phased rollout. "
             "Sarah will create a Jira ticket for the onboarding workflow by Friday. "
