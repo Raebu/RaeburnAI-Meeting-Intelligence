@@ -1,0 +1,7 @@
+# Default ownership for all production code and repository configuration.
+* @Raebu
+
+# Security-sensitive automation and release configuration.
+/.github/ @Raebu
+/apps/api/ @Raebu
+/apps/web/ @Raebu
