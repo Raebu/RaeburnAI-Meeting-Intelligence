@@ -2,6 +2,8 @@ from fastapi.testclient import TestClient
 
 from meeting_intelligence.main import app
 
+API_HEADERS = {"x-api-key": "test-only-api-key"}
+
 
 def test_health_and_readiness() -> None:
     client = TestClient(app)
@@ -13,6 +15,7 @@ def test_analyse_meeting_end_to_end() -> None:
     client = TestClient(app)
     response = client.post(
         "/v1/meetings/analyse",
+        headers=API_HEADERS,
         json={
             "meeting_id": "test-meeting-1",
             "title": "Implementation meeting",
@@ -32,6 +35,8 @@ def test_analyse_meeting_end_to_end() -> None:
     assert len(payload["action_items"]) == 1
     assert payload["integration_commands"]
 
-    get_response = client.get("/v1/meetings/test-meeting-1")
+    get_response = client.get(
+        "/v1/meetings/test-meeting-1", headers=API_HEADERS
+    )
     assert get_response.status_code == 200
     assert get_response.json()["meeting_id"] == "test-meeting-1"
