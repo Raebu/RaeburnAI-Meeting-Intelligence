@@ -42,8 +42,7 @@ class GitHubIssueAdapter(IntegrationAdapter):
                 detail="disabled",
             )
         repository = (
-            command.payload.get("repository")
-            or self.settings.github_default_repository
+            command.payload.get("repository") or self.settings.github_default_repository
         )
         if not repository or not self.settings.github_token:
             return DispatchResult(
