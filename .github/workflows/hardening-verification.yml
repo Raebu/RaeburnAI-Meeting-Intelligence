@@ -1,7 +1,8 @@
 name: Hardening verification
 
-# Executes only for the named same-repository hardening branch. This prevents
-# arbitrary fork or branch code from reaching the verification runner.
+# Run hardening checks for every pull request whose head branch belongs to this
+# repository. Fork PRs remain excluded so untrusted code cannot reach these
+# verification jobs.
 on:
   pull_request:
     branches: [main]
@@ -15,7 +16,7 @@ concurrency:
 
 jobs:
   api:
-    if: github.head_ref == 'production-hardening-persistence-20260726' && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     defaults:
@@ -30,6 +31,8 @@ jobs:
       AUTO_CREATE_SCHEMA: "true"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12.13"
@@ -58,7 +61,7 @@ jobs:
         run: python scripts/check_secrets.py
 
   web:
-    if: github.head_ref == 'production-hardening-persistence-20260726' && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     defaults:
@@ -66,6 +69,8 @@ jobs:
         working-directory: apps/web
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: "22.17.1"
@@ -78,11 +83,13 @@ jobs:
       - run: npm audit --audit-level=high
 
   containers:
-    if: github.head_ref == 'production-hardening-persistence-20260726' && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - run: POSTGRES_PASSWORD=compose-validation-only docker compose config --quiet
       - run: docker build --pull -f apps/api/Dockerfile -t meeting-intelligence-api:${{ github.sha }} .
       - run: docker build --pull -f apps/web/Dockerfile -t meeting-intelligence-web:${{ github.sha }} .
