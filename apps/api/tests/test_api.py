@@ -16,8 +16,13 @@ def test_analyse_meeting_end_to_end() -> None:
         json={
             "meeting_id": "test-meeting-1",
             "title": "Implementation meeting",
-            "transcript": "We decided to use GitHub Issues. Sarah will create the GitHub issue by Friday.",
-            "attendees": [{"name": "Sarah", "email": "sarah@example.com"}],
+            "transcript": (
+                "We decided to use GitHub Issues. Sarah will create the GitHub "
+                "issue by Friday."
+            ),
+            "attendees": [
+                {"name": "Sarah", "email": "sarah@example.com"}
+            ],
             "context": {"repository": "Raebu/example"},
         },
     )
