@@ -134,9 +134,7 @@ class MeetingIntelligenceEngine:
         for name, attendee in attendee_lookup.items():
             if name in lowered:
                 return attendee.name, attendee.email
-        match = re.search(
-            r"\b([A-Z][a-z]+)\b\s+(?:will|to|can|should|needs)", sentence
-        )
+        match = re.search(r"\b([A-Z][a-z]+)\b\s+(?:will|to|can|should|needs)", sentence)
         if match:
             return match.group(1), None
         return None, None
