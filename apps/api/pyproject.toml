@@ -39,7 +39,7 @@ include = ["meeting_intelligence*"]
 exclude = ["fuzz*", "tests*"]
 
 [tool.ruff]
-line-length = 140
+line-length = 88
 target-version = "py311"
 
 [tool.ruff.lint]
