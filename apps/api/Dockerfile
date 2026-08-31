@@ -5,6 +5,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# Apply currently available Debian security fixes. Trivy is configured to ignore
+# vulnerabilities that do not yet have an upstream fix, so remaining HIGH/CRITICAL
+# findings after this step are actionable rather than stale base-layer packages.
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY apps/api/pyproject.toml ./pyproject.toml
 COPY apps/api/meeting_intelligence ./meeting_intelligence
 
