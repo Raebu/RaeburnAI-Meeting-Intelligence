@@ -39,8 +39,6 @@ jobs:
           cache: pip
       - run: python -m pip install -e '.[dev]'
       - run: ruff check .
-      - name: Show formatter diff
-        run: ruff format --diff .
       - run: ruff format --check .
       - run: mypy meeting_intelligence
       - name: Migration upgrade, rollback and re-upgrade
