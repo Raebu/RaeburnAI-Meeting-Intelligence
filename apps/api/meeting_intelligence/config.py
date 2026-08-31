@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     )
 
     environment: str = Field(default="development", alias="RAEBURN_ENV")
-    api_key: str = Field(default="change-me", alias="RAEBURN_API_KEY")
+    api_key: str = Field(alias="RAEBURN_API_KEY")
     public_base_url: str = Field(
         default="http://localhost:3000", alias="RAEBURN_PUBLIC_BASE_URL"
     )
