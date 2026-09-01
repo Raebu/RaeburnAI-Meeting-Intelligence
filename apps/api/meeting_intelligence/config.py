@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = Field(
         default=60, alias="RAEBURN_RATE_LIMIT_PER_MINUTE"
     )
+    meeting_retention_seconds: int = Field(
+        default=2_592_000, ge=60, alias="MEETING_RETENTION_SECONDS"
+    )
     database_url: str = Field(
         default="postgresql+psycopg://raeburn:raeburn@localhost:5432/meeting_intelligence",
         alias="DATABASE_URL",
