@@ -25,7 +25,10 @@ settings = get_settings()
 app = FastAPI(
     title="RaeburnAI Meeting Intelligence API",
     version="0.1.0",
-    description="Meeting intelligence API for decisions, actions, owners and workflow writebacks.",
+    description=(
+        "Meeting intelligence API for decisions, actions, owners and workflow "
+        "writebacks."
+    ),
 )
 app.add_middleware(
     CORSMiddleware,
@@ -70,22 +73,27 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 
 def require_api_key(
-    x_api_key: str | None = Header(default=None), app_settings: Settings = Depends(get_settings)
+    x_api_key: str | None = Header(default=None),
+    app_settings: Settings = Depends(get_settings),
 ) -> None:
-    if app_settings.environment == "development" and app_settings.api_key.startswith("change-me"):
-        return
     if x_api_key != app_settings.api_key:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key"
+        )
 
 
 @app.get("/healthz", response_model=HealthResponse)
 def healthz() -> HealthResponse:
-    return HealthResponse(status="ok", service="meeting-intelligence-api", version="0.1.0")
+    return HealthResponse(
+        status="ok", service="meeting-intelligence-api", version="0.1.0"
+    )
 
 
 @app.get("/readyz", response_model=HealthResponse)
 def readyz() -> HealthResponse:
-    return HealthResponse(status="ready", service="meeting-intelligence-api", version="0.1.0")
+    return HealthResponse(
+        status="ready", service="meeting-intelligence-api", version="0.1.0"
+    )
 
 
 @app.post(
@@ -119,7 +127,10 @@ def analyse_meeting(request: MeetingAnalyseRequest) -> MeetingIntelligenceResult
 def get_meeting_result(meeting_id: str) -> MeetingIntelligenceResult:
     result = _results.get(meeting_id)
     if not result:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting result not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Meeting result not found",
+        )
     return result
 
 
@@ -128,16 +139,25 @@ def get_meeting_result(meeting_id: str) -> MeetingIntelligenceResult:
     response_model=MeetingIntelligenceResult,
     dependencies=[Depends(require_api_key)],
 )
-def approve_commands(meeting_id: str, approval: ApprovalRequest) -> MeetingIntelligenceResult:
+def approve_commands(
+    meeting_id: str, approval: ApprovalRequest
+) -> MeetingIntelligenceResult:
     result = _results.get(meeting_id)
     if not result:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting result not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Meeting result not found",
+        )
     requested_ids: set[UUID] = set(approval.command_ids)
     for command in result.integration_commands:
         if command.id in requested_ids:
             command.approval_status = ApprovalStatus.approved
     result.audit_events.append(f"commands.approved_by:{approval.approved_by}")
-    logger.info("commands_approved", meeting_id=meeting_id, approved_by=approval.approved_by)
+    logger.info(
+        "commands_approved",
+        meeting_id=meeting_id,
+        approved_by=approval.approved_by,
+    )
     return result
 
 
@@ -146,14 +166,23 @@ def approve_commands(meeting_id: str, approval: ApprovalRequest) -> MeetingIntel
     response_model=MeetingIntelligenceResult,
     dependencies=[Depends(require_api_key)],
 )
-def reject_commands(meeting_id: str, approval: ApprovalRequest) -> MeetingIntelligenceResult:
+def reject_commands(
+    meeting_id: str, approval: ApprovalRequest
+) -> MeetingIntelligenceResult:
     result = _results.get(meeting_id)
     if not result:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting result not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Meeting result not found",
+        )
     requested_ids: set[UUID] = set(approval.command_ids)
     for command in result.integration_commands:
         if command.id in requested_ids:
             command.approval_status = ApprovalStatus.rejected
     result.audit_events.append(f"commands.rejected_by:{approval.approved_by}")
-    logger.info("commands_rejected", meeting_id=meeting_id, rejected_by=approval.approved_by)
+    logger.info(
+        "commands_rejected",
+        meeting_id=meeting_id,
+        rejected_by=approval.approved_by,
+    )
     return result

@@ -34,7 +34,9 @@ class MeetingContext(BaseModel):
     crm_account_id: str | None = None
     crm_deal_id: str | None = None
     project_key: str | None = None
-    repository: str | None = Field(default=None, description="owner/repo GitHub repository")
+    repository: str | None = Field(
+        default=None, description="owner/repo GitHub repository"
+    )
     source_url: HttpUrl | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 

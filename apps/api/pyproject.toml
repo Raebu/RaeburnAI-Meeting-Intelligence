@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Production-ready meeting intelligence API for decisions, actions, owners and workflow writebacks."
 requires-python = ">=3.11,<3.13"
 dependencies = [
-  "fastapi==0.116.0",
+  "fastapi==0.141.1",
   "uvicorn[standard]==0.35.0",
   "pydantic==2.11.7",
   "pydantic-settings==2.10.1",
@@ -22,12 +22,14 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-  "pytest==8.4.1",
-  "pytest-asyncio==1.0.0",
+  "pytest==9.0.3",
+  "pytest-asyncio==1.4.0",
   "ruff==0.12.1",
   "mypy==1.16.1",
   "types-python-dateutil==2.9.0.20250516",
-  "atheris==3.1.0"
+  "atheris==3.1.0",
+  "build==1.6.0",
+  "pip-audit==2.10.1"
 ]
 
 [project.scripts]
@@ -39,11 +41,14 @@ include = ["meeting_intelligence*"]
 exclude = ["fuzz*", "tests*"]
 
 [tool.ruff]
-line-length = 140
+line-length = 88
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "S"]
+# Let Ruff's formatter own whitespace/line-layout style. Keep the substantive
+# pycodestyle syntax/import families plus correctness, modernization and
+# security rules enabled for CI.
+select = ["E4", "E7", "E9", "F", "I", "B", "UP", "S"]
 ignore = ["S101", "B008"]
 
 [tool.mypy]
