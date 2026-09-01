@@ -35,8 +35,6 @@ def test_analyse_meeting_end_to_end() -> None:
     assert len(payload["action_items"]) == 1
     assert payload["integration_commands"]
 
-    get_response = client.get(
-        "/v1/meetings/test-meeting-1", headers=API_HEADERS
-    )
+    get_response = client.get("/v1/meetings/test-meeting-1", headers=API_HEADERS)
     assert get_response.status_code == 200
     assert get_response.json()["meeting_id"] == "test-meeting-1"
