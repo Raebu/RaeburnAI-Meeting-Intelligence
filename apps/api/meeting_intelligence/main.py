@@ -34,7 +34,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
     allow_credentials=False,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["content-type", "x-api-key"],
 )
 
@@ -131,6 +131,22 @@ def get_meeting_result(meeting_id: str) -> MeetingIntelligenceResult:
             detail="Meeting result not found",
         )
     return result
+
+
+@app.delete(
+    "/v1/meetings/{meeting_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_api_key)],
+)
+def delete_meeting_result(meeting_id: str) -> Response:
+    if meeting_id not in _results:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Meeting result not found",
+        )
+    del _results[meeting_id]
+    logger.info("meeting_deleted", meeting_id=meeting_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @app.post(
