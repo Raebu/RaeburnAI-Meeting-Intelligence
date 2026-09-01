@@ -133,6 +133,26 @@ def get_meeting_result(meeting_id: str) -> MeetingIntelligenceResult:
     return result
 
 
+@app.get(
+    "/v1/meetings/{meeting_id}/export",
+    dependencies=[Depends(require_api_key)],
+)
+def export_meeting_result(meeting_id: str) -> JSONResponse:
+    result = _results.get(meeting_id)
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Meeting result not found",
+        )
+    logger.info("meeting_exported", meeting_id=meeting_id)
+    return JSONResponse(
+        content=result.model_dump(mode="json"),
+        headers={
+            "Content-Disposition": f'attachment; filename="meeting-{meeting_id}.json"'
+        },
+    )
+
+
 @app.delete(
     "/v1/meetings/{meeting_id}",
     status_code=status.HTTP_204_NO_CONTENT,
