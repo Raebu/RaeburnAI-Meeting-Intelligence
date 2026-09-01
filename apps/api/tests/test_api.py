@@ -1,8 +1,9 @@
 from fastapi.testclient import TestClient
 
+from meeting_intelligence.config import get_settings
 from meeting_intelligence.main import app
 
-API_HEADERS = {"x-api-key": "test-only-api-key"}
+API_HEADERS = {"x-api-key": get_settings().api_key}
 
 
 def test_health_and_readiness() -> None:
