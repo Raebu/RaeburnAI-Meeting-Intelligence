@@ -41,9 +41,8 @@ def test_concurrent_approval_decisions_are_terminal() -> None:
             )
             status_value = None
             if response.status_code == 200:
-                status_value = response.json()["integration_commands"][0][
-                    "approval_status"
-                ]
+                command = response.json()["integration_commands"][0]
+                status_value = command["approval_status"]
             return response.status_code, status_value
 
     with ThreadPoolExecutor(max_workers=2) as executor:
@@ -58,7 +57,5 @@ def test_concurrent_approval_decisions_are_terminal() -> None:
     with TestClient(app) as client:
         stored = client.get(f"/v1/meetings/{meeting_id}", headers=API_HEADERS)
     assert stored.status_code == 200
-    assert (
-        stored.json()["integration_commands"][0]["approval_status"]
-        == successful_status
-    )
+    stored_command = stored.json()["integration_commands"][0]
+    assert stored_command["approval_status"] == successful_status
