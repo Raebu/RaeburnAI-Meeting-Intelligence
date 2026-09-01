@@ -103,9 +103,8 @@ def readyz() -> HealthResponse:
 )
 def analyse_meeting(request: MeetingAnalyseRequest) -> MeetingIntelligenceResult:
     result = _engine.analyse(request)
-    require_approval = request.require_approval
-    if require_approval is None:
-        require_approval = get_settings().approvals_required
+    app_settings = get_settings()
+    require_approval = app_settings.approvals_required or bool(request.require_approval)
     if not require_approval:
         for command in result.integration_commands:
             command.approval_status = ApprovalStatus.approved

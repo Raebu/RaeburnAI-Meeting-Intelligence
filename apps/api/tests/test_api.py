@@ -39,3 +39,27 @@ def test_analyse_meeting_end_to_end() -> None:
     get_response = client.get("/v1/meetings/test-meeting-1", headers=API_HEADERS)
     assert get_response.status_code == 200
     assert get_response.json()["meeting_id"] == "test-meeting-1"
+
+
+def test_request_cannot_bypass_server_approval_policy() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/v1/meetings/analyse",
+        headers=API_HEADERS,
+        json={
+            "meeting_id": "test-approval-policy",
+            "title": "Approval policy test",
+            "transcript": (
+                "We decided to create a GitHub issue. Sarah will create the GitHub "
+                "issue by Friday."
+            ),
+            "attendees": [{"name": "Sarah", "email": "sarah@example.com"}],
+            "context": {"repository": "Raebu/example"},
+            "require_approval": False,
+        },
+    )
+
+    assert response.status_code == 200
+    commands = response.json()["integration_commands"]
+    assert commands
+    assert all(command["approval_status"] == "pending" for command in commands)
