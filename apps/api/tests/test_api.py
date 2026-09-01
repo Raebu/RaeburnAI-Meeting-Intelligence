@@ -65,13 +65,48 @@ def test_export_meeting_requires_auth_and_returns_attachment() -> None:
     )
     assert export_response.status_code == 200
     assert export_response.headers["content-type"].startswith("application/json")
-    assert export_response.headers["content-disposition"] == (
-        f'attachment; filename="meeting-{meeting_id}.json"'
-    )
+    assert export_response.headers["cache-control"] == "private, no-store"
+    assert export_response.headers["vary"] == "X-API-Key"
+    disposition = export_response.headers["content-disposition"]
+    assert 'filename="meeting-export.json"' in disposition
+    assert "filename*=UTF-8''meeting-test-meeting-export.json" in disposition
     assert export_response.json()["meeting_id"] == meeting_id
+
+    schema = client.get("/openapi.json").json()
+    export_schema = schema["paths"]["/v1/meetings/{meeting_id}/export"]["get"]
+    response_schema = export_schema["responses"]["200"]["content"]["application/json"][
+        "schema"
+    ]
+    assert response_schema["$ref"].endswith("/MeetingIntelligenceResult")
 
     missing = client.get("/v1/meetings/missing/export", headers=API_HEADERS)
     assert missing.status_code == 404
+
+
+def test_export_meeting_supports_unicode_identifier() -> None:
+    client = TestClient(app)
+    meeting_id = "会议"
+    create_response = client.post(
+        "/v1/meetings/analyse",
+        headers=API_HEADERS,
+        json={
+            "meeting_id": meeting_id,
+            "title": "Unicode export test",
+            "transcript": "We decided to verify unicode-safe meeting exports.",
+            "attendees": [],
+            "context": {},
+        },
+    )
+    assert create_response.status_code == 200
+
+    export_response = client.get(
+        f"/v1/meetings/{meeting_id}/export", headers=API_HEADERS
+    )
+    assert export_response.status_code == 200
+    disposition = export_response.headers["content-disposition"]
+    assert 'filename="meeting-export.json"' in disposition
+    assert "filename*=UTF-8''meeting-%E4%BC%9A%E8%AE%AE.json" in disposition
+    assert export_response.json()["meeting_id"] == meeting_id
 
 
 def test_delete_meeting_requires_auth_and_removes_result() -> None:
