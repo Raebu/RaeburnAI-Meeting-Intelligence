@@ -76,10 +76,6 @@ def require_api_key(
     x_api_key: str | None = Header(default=None),
     app_settings: Settings = Depends(get_settings),
 ) -> None:
-    if app_settings.environment == "development" and app_settings.api_key.startswith(
-        "change-me"
-    ):
-        return
     if x_api_key != app_settings.api_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key"
