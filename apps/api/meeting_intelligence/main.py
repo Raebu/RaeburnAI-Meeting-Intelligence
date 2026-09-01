@@ -4,8 +4,8 @@ import hashlib
 import time
 from collections import defaultdict, deque
 from collections.abc import Awaitable, Callable
+from threading import Lock
 from urllib.parse import quote
-from uuid import UUID
 
 import structlog
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
@@ -18,6 +18,7 @@ from meeting_intelligence.schemas import (
     ApprovalRequest,
     ApprovalStatus,
     HealthResponse,
+    IntegrationCommand,
     MeetingAnalyseRequest,
     MeetingIntelligenceResult,
 )
@@ -43,6 +44,7 @@ app.add_middleware(
 _engine = MeetingIntelligenceEngine()
 _results: dict[str, MeetingIntelligenceResult] = {}
 _rate_window: dict[str, deque[float]] = defaultdict(deque)
+_approval_locks: defaultdict[str, Lock] = defaultdict(Lock)
 
 
 def _safe_ref(value: str) -> str:
@@ -55,6 +57,35 @@ def _safe_route_path(request: Request) -> str:
     route = request.scope.get("route")
     route_path = getattr(route, "path", None)
     return route_path if isinstance(route_path, str) else "unresolved"
+
+
+def _approval_targets(
+    result: MeetingIntelligenceResult, approval: ApprovalRequest
+) -> list[IntegrationCommand]:
+    requested_ids = set(approval.command_ids)
+    if not requested_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one command ID is required",
+        )
+
+    commands_by_id = {command.id: command for command in result.integration_commands}
+    missing_ids = requested_ids - commands_by_id.keys()
+    if missing_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="One or more command IDs do not belong to this meeting",
+        )
+
+    targets = [commands_by_id[command_id] for command_id in requested_ids]
+    if any(
+        command.approval_status is not ApprovalStatus.pending for command in targets
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only pending commands can be approved or rejected",
+        )
+    return targets
 
 
 @app.middleware("http")
@@ -206,17 +237,17 @@ def delete_meeting_result(meeting_id: str) -> Response:
 def approve_commands(
     meeting_id: str, approval: ApprovalRequest
 ) -> MeetingIntelligenceResult:
-    result = _results.get(meeting_id)
-    if not result:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Meeting result not found",
-        )
-    requested_ids: set[UUID] = set(approval.command_ids)
-    for command in result.integration_commands:
-        if command.id in requested_ids:
+    with _approval_locks[meeting_id]:
+        result = _results.get(meeting_id)
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Meeting result not found",
+            )
+        targets = _approval_targets(result, approval)
+        for command in targets:
             command.approval_status = ApprovalStatus.approved
-    result.audit_events.append(f"commands.approved_by:{approval.approved_by}")
+        result.audit_events.append(f"commands.approved_by:{approval.approved_by}")
     logger.info(
         "commands_approved",
         meeting_ref=_safe_ref(meeting_id),
@@ -233,17 +264,17 @@ def approve_commands(
 def reject_commands(
     meeting_id: str, approval: ApprovalRequest
 ) -> MeetingIntelligenceResult:
-    result = _results.get(meeting_id)
-    if not result:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Meeting result not found",
-        )
-    requested_ids: set[UUID] = set(approval.command_ids)
-    for command in result.integration_commands:
-        if command.id in requested_ids:
+    with _approval_locks[meeting_id]:
+        result = _results.get(meeting_id)
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Meeting result not found",
+            )
+        targets = _approval_targets(result, approval)
+        for command in targets:
             command.approval_status = ApprovalStatus.rejected
-    result.audit_events.append(f"commands.rejected_by:{approval.approved_by}")
+        result.audit_events.append(f"commands.rejected_by:{approval.approved_by}")
     logger.info(
         "commands_rejected",
         meeting_ref=_safe_ref(meeting_id),
