@@ -41,6 +41,39 @@ def test_analyse_meeting_end_to_end() -> None:
     assert get_response.json()["meeting_id"] == "test-meeting-1"
 
 
+def test_export_meeting_requires_auth_and_returns_attachment() -> None:
+    client = TestClient(app)
+    meeting_id = "test-meeting-export"
+    create_response = client.post(
+        "/v1/meetings/analyse",
+        headers=API_HEADERS,
+        json={
+            "meeting_id": meeting_id,
+            "title": "Retention export test",
+            "transcript": "We decided to export the meeting record for review.",
+            "attendees": [],
+            "context": {},
+        },
+    )
+    assert create_response.status_code == 200
+
+    unauthorized = client.get(f"/v1/meetings/{meeting_id}/export")
+    assert unauthorized.status_code == 401
+
+    export_response = client.get(
+        f"/v1/meetings/{meeting_id}/export", headers=API_HEADERS
+    )
+    assert export_response.status_code == 200
+    assert export_response.headers["content-type"].startswith("application/json")
+    assert export_response.headers["content-disposition"] == (
+        f'attachment; filename="meeting-{meeting_id}.json"'
+    )
+    assert export_response.json()["meeting_id"] == meeting_id
+
+    missing = client.get("/v1/meetings/missing/export", headers=API_HEADERS)
+    assert missing.status_code == 404
+
+
 def test_delete_meeting_requires_auth_and_removes_result() -> None:
     client = TestClient(app)
     meeting_id = "test-meeting-delete"
