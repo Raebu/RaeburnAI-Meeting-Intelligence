@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = Field(
         default=60, alias="RAEBURN_RATE_LIMIT_PER_MINUTE"
     )
+    rate_limit_max_clients: int = Field(
+        default=10_000, ge=100, alias="RAEBURN_RATE_LIMIT_MAX_CLIENTS"
+    )
     meeting_retention_seconds: int = Field(
         default=2_592_000, ge=60, alias="MEETING_RETENTION_SECONDS"
     )

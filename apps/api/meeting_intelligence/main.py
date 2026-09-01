@@ -44,7 +44,8 @@ app.add_middleware(
 _engine = MeetingIntelligenceEngine()
 _results: dict[str, MeetingIntelligenceResult] = {}
 _result_stored_at: dict[str, float] = {}
-_rate_window: dict[str, deque[float]] = defaultdict(deque)
+_rate_window: dict[str, deque[float]] = {}
+_rate_limit_lock = Lock()
 _meeting_locks: defaultdict[str, Lock] = defaultdict(Lock)
 
 
@@ -105,23 +106,51 @@ def _stored_result(meeting_id: str) -> MeetingIntelligenceResult | None:
     return result
 
 
+def _consume_rate_limit(client: str, now: float) -> bool:
+    """Consume one request slot while keeping per-client state memory-bounded."""
+    app_settings = get_settings()
+    window_seconds = 60.0
+
+    with _rate_limit_lock:
+        window = _rate_window.get(client)
+        if window is None:
+            if len(_rate_window) >= app_settings.rate_limit_max_clients:
+                stale_clients = [
+                    key
+                    for key, timestamps in _rate_window.items()
+                    if not timestamps or now - timestamps[-1] > window_seconds
+                ]
+                for key in stale_clients:
+                    _rate_window.pop(key, None)
+
+            if len(_rate_window) >= app_settings.rate_limit_max_clients:
+                return False
+
+            window = deque()
+            _rate_window[client] = window
+
+        while window and now - window[0] > window_seconds:
+            window.popleft()
+
+        if len(window) >= app_settings.rate_limit_per_minute:
+            return False
+
+        window.append(now)
+        return True
+
+
 @app.middleware("http")
 async def rate_limit_and_audit(
     request: Request, call_next: Callable[[Request], Awaitable[Response]]
 ) -> Response:
     client = request.client.host if request.client else "unknown"
-    now = time.monotonic()
-    window = _rate_window[client]
-    while window and now - window[0] > 60:
-        window.popleft()
-    if len(window) >= settings.rate_limit_per_minute:
+    if not _consume_rate_limit(client, time.monotonic()):
         logger.warning(
             "rate_limit_exceeded",
             client_ref=_safe_ref(client),
             route=_safe_route_path(request),
         )
         return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"})
-    window.append(now)
     response = await call_next(request)
     logger.info(
         "request_completed",
