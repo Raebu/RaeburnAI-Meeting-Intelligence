@@ -25,7 +25,7 @@ jobs:
       - run: pip install -e .[dev]
       - run: ruff check .
       - run: mypy meeting_intelligence
-      - run: pytest
+      - run: pytest --cov=meeting_intelligence --cov-report=term-missing --cov-fail-under=60
 
   web:
     name: Web lint, typecheck, tests and build
