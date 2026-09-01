@@ -78,7 +78,9 @@ def _approval_targets(
         )
 
     targets = [commands_by_id[command_id] for command_id in requested_ids]
-    if any(command.approval_status is not ApprovalStatus.pending for command in targets):
+    if any(
+        command.approval_status is not ApprovalStatus.pending for command in targets
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Only pending commands can be approved or rejected",
