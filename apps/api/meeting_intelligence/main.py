@@ -6,7 +6,6 @@ from collections import defaultdict, deque
 from collections.abc import Awaitable, Callable
 from threading import Lock
 from urllib.parse import quote
-from uuid import UUID
 
 import structlog
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
