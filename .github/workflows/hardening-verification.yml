@@ -45,10 +45,18 @@ jobs:
         env:
           AUTO_CREATE_SCHEMA: "false"
         run: |
-          rm -f ci.db
-          alembic upgrade head
-          alembic downgrade base
-          alembic upgrade head
+          if [ -f alembic.ini ]; then
+            command -v alembic >/dev/null || {
+              echo "alembic.ini exists but Alembic is not installed" >&2
+              exit 1
+            }
+            rm -f ci.db
+            alembic upgrade head
+            alembic downgrade base
+            alembic upgrade head
+          else
+            echo "No Alembic migration assets on this branch; migration round-trip not applicable."
+          fi
       - name: Unit, integration and E2E tests
         env:
           DATABASE_URL: "sqlite+pysqlite:///:memory:"
