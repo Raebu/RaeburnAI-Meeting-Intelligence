@@ -58,4 +58,7 @@ def test_concurrent_approval_decisions_are_terminal() -> None:
     with TestClient(app) as client:
         stored = client.get(f"/v1/meetings/{meeting_id}", headers=API_HEADERS)
     assert stored.status_code == 200
-    assert stored.json()["integration_commands"][0]["approval_status"] == successful_status
+    assert (
+        stored.json()["integration_commands"][0]["approval_status"]
+        == successful_status
+    )
