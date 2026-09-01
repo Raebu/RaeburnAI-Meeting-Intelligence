@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from fastapi.testclient import TestClient
 
 from meeting_intelligence.config import get_settings
@@ -161,3 +163,84 @@ def test_request_cannot_bypass_server_approval_policy() -> None:
     commands = response.json()["integration_commands"]
     assert commands
     assert all(command["approval_status"] == "pending" for command in commands)
+
+
+def _create_approval_test_meeting(client: TestClient, meeting_id: str) -> dict:
+    response = client.post(
+        "/v1/meetings/analyse",
+        headers=API_HEADERS,
+        json={
+            "meeting_id": meeting_id,
+            "title": "Approval integrity test",
+            "transcript": (
+                "We decided to create a GitHub issue. Sarah will create the GitHub "
+                "issue by Friday."
+            ),
+            "attendees": [{"name": "Sarah", "email": "sarah@example.com"}],
+            "context": {"repository": "Raebu/example"},
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["integration_commands"]
+    return payload
+
+
+def test_approval_rejects_empty_and_foreign_command_ids_atomically() -> None:
+    client = TestClient(app)
+    meeting_id = "test-approval-target-validation"
+    payload = _create_approval_test_meeting(client, meeting_id)
+    command_id = payload["integration_commands"][0]["id"]
+
+    empty = client.post(
+        f"/v1/approvals/{meeting_id}/approve",
+        headers=API_HEADERS,
+        json={"command_ids": [], "approved_by": "reviewer@example.com"},
+    )
+    assert empty.status_code == 400
+
+    mixed = client.post(
+        f"/v1/approvals/{meeting_id}/approve",
+        headers=API_HEADERS,
+        json={
+            "command_ids": [command_id, str(uuid4())],
+            "approved_by": "reviewer@example.com",
+        },
+    )
+    assert mixed.status_code == 400
+
+    stored = client.get(f"/v1/meetings/{meeting_id}", headers=API_HEADERS)
+    assert stored.status_code == 200
+    assert stored.json()["integration_commands"][0]["approval_status"] == "pending"
+
+
+def test_approval_decision_is_terminal_for_each_command() -> None:
+    client = TestClient(app)
+    meeting_id = "test-approval-terminal-state"
+    payload = _create_approval_test_meeting(client, meeting_id)
+    command_id = payload["integration_commands"][0]["id"]
+
+    approve = client.post(
+        f"/v1/approvals/{meeting_id}/approve",
+        headers=API_HEADERS,
+        json={
+            "command_ids": [command_id],
+            "approved_by": "reviewer@example.com",
+        },
+    )
+    assert approve.status_code == 200
+    assert approve.json()["integration_commands"][0]["approval_status"] == "approved"
+
+    reverse = client.post(
+        f"/v1/approvals/{meeting_id}/reject",
+        headers=API_HEADERS,
+        json={
+            "command_ids": [command_id],
+            "approved_by": "second-reviewer@example.com",
+        },
+    )
+    assert reverse.status_code == 409
+
+    stored = client.get(f"/v1/meetings/{meeting_id}", headers=API_HEADERS)
+    assert stored.status_code == 200
+    assert stored.json()["integration_commands"][0]["approval_status"] == "approved"
