@@ -44,7 +44,7 @@ app.add_middleware(
 _engine = MeetingIntelligenceEngine()
 _results: dict[str, MeetingIntelligenceResult] = {}
 _rate_window: dict[str, deque[float]] = defaultdict(deque)
-_approval_locks: defaultdict[str, Lock] = defaultdict(Lock)
+_meeting_locks: defaultdict[str, Lock] = defaultdict(Lock)
 
 
 def _safe_ref(value: str) -> str:
@@ -161,7 +161,8 @@ def analyse_meeting(request: MeetingAnalyseRequest) -> MeetingIntelligenceResult
     if not require_approval:
         for command in result.integration_commands:
             command.approval_status = ApprovalStatus.approved
-    _results[request.meeting_id] = result
+    with _meeting_locks[request.meeting_id]:
+        _results[request.meeting_id] = result.model_copy(deep=True)
     logger.info(
         "meeting_analyzed",
         meeting_ref=_safe_ref(request.meeting_id),
@@ -177,13 +178,14 @@ def analyse_meeting(request: MeetingAnalyseRequest) -> MeetingIntelligenceResult
     dependencies=[Depends(require_api_key)],
 )
 def get_meeting_result(meeting_id: str) -> MeetingIntelligenceResult:
-    result = _results.get(meeting_id)
-    if not result:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Meeting result not found",
-        )
-    return result
+    with _meeting_locks[meeting_id]:
+        result = _results.get(meeting_id)
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Meeting result not found",
+            )
+        return result.model_copy(deep=True)
 
 
 @app.get(
@@ -192,16 +194,18 @@ def get_meeting_result(meeting_id: str) -> MeetingIntelligenceResult:
     dependencies=[Depends(require_api_key)],
 )
 def export_meeting_result(meeting_id: str) -> JSONResponse:
-    result = _results.get(meeting_id)
-    if not result:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Meeting result not found",
-        )
+    with _meeting_locks[meeting_id]:
+        result = _results.get(meeting_id)
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Meeting result not found",
+            )
+        exported = result.model_dump(mode="json")
     logger.info("meeting_exported", meeting_ref=_safe_ref(meeting_id))
     encoded_filename = quote(f"meeting-{meeting_id}.json", safe="")
     return JSONResponse(
-        content=result.model_dump(mode="json"),
+        content=exported,
         headers={
             "Cache-Control": "private, no-store",
             "Content-Disposition": (
@@ -219,12 +223,13 @@ def export_meeting_result(meeting_id: str) -> JSONResponse:
     dependencies=[Depends(require_api_key)],
 )
 def delete_meeting_result(meeting_id: str) -> Response:
-    if meeting_id not in _results:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Meeting result not found",
-        )
-    del _results[meeting_id]
+    with _meeting_locks[meeting_id]:
+        if meeting_id not in _results:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Meeting result not found",
+            )
+        del _results[meeting_id]
     logger.info("meeting_deleted", meeting_ref=_safe_ref(meeting_id))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -237,7 +242,7 @@ def delete_meeting_result(meeting_id: str) -> Response:
 def approve_commands(
     meeting_id: str, approval: ApprovalRequest
 ) -> MeetingIntelligenceResult:
-    with _approval_locks[meeting_id]:
+    with _meeting_locks[meeting_id]:
         result = _results.get(meeting_id)
         if not result:
             raise HTTPException(
@@ -248,12 +253,13 @@ def approve_commands(
         for command in targets:
             command.approval_status = ApprovalStatus.approved
         result.audit_events.append(f"commands.approved_by:{approval.approved_by}")
+        response_result = result.model_copy(deep=True)
     logger.info(
         "commands_approved",
         meeting_ref=_safe_ref(meeting_id),
         actor_ref=_safe_ref(approval.approved_by),
     )
-    return result
+    return response_result
 
 
 @app.post(
@@ -264,7 +270,7 @@ def approve_commands(
 def reject_commands(
     meeting_id: str, approval: ApprovalRequest
 ) -> MeetingIntelligenceResult:
-    with _approval_locks[meeting_id]:
+    with _meeting_locks[meeting_id]:
         result = _results.get(meeting_id)
         if not result:
             raise HTTPException(
@@ -275,9 +281,10 @@ def reject_commands(
         for command in targets:
             command.approval_status = ApprovalStatus.rejected
         result.audit_events.append(f"commands.rejected_by:{approval.approved_by}")
+        response_result = result.model_copy(deep=True)
     logger.info(
         "commands_rejected",
         meeting_ref=_safe_ref(meeting_id),
         actor_ref=_safe_ref(approval.approved_by),
     )
-    return result
+    return response_result
