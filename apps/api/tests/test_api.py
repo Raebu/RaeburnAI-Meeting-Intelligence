@@ -41,6 +41,40 @@ def test_analyse_meeting_end_to_end() -> None:
     assert get_response.json()["meeting_id"] == "test-meeting-1"
 
 
+def test_delete_meeting_requires_auth_and_removes_result() -> None:
+    client = TestClient(app)
+    meeting_id = "test-meeting-delete"
+    create_response = client.post(
+        "/v1/meetings/analyse",
+        headers=API_HEADERS,
+        json={
+            "meeting_id": meeting_id,
+            "title": "Retention deletion test",
+            "transcript": "We decided to archive the transcript after review.",
+            "attendees": [],
+            "context": {},
+        },
+    )
+    assert create_response.status_code == 200
+
+    unauthorized = client.delete(f"/v1/meetings/{meeting_id}")
+    assert unauthorized.status_code == 401
+
+    delete_response = client.delete(
+        f"/v1/meetings/{meeting_id}", headers=API_HEADERS
+    )
+    assert delete_response.status_code == 204
+    assert delete_response.content == b""
+
+    missing_response = client.get(f"/v1/meetings/{meeting_id}", headers=API_HEADERS)
+    assert missing_response.status_code == 404
+
+    repeat_delete = client.delete(
+        f"/v1/meetings/{meeting_id}", headers=API_HEADERS
+    )
+    assert repeat_delete.status_code == 404
+
+
 def test_request_cannot_bypass_server_approval_policy() -> None:
     client = TestClient(app)
     response = client.post(
