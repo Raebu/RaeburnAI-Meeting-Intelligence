@@ -17,9 +17,12 @@ def test_expired_meeting_is_purged_before_read_export_and_approval() -> None:
         json={
             "meeting_id": meeting_id,
             "title": "Retention enforcement test",
-            "transcript": "We decided to retain this record only for the configured period.",
-            "attendees": [],
-            "context": {},
+            "transcript": (
+                "We decided to use GitHub Issues. Sarah will create the GitHub "
+                "issue by Friday."
+            ),
+            "attendees": [{"name": "Sarah", "email": "sarah@example.com"}],
+            "context": {"repository": "Raebu/example"},
         },
     )
     assert create_response.status_code == 200
