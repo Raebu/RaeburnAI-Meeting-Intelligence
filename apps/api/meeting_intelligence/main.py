@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 from collections import defaultdict, deque
 from collections.abc import Awaitable, Callable
+from urllib.parse import quote
 from uuid import UUID
 
 import structlog
@@ -131,6 +132,33 @@ def get_meeting_result(meeting_id: str) -> MeetingIntelligenceResult:
             detail="Meeting result not found",
         )
     return result
+
+
+@app.get(
+    "/v1/meetings/{meeting_id}/export",
+    response_model=MeetingIntelligenceResult,
+    dependencies=[Depends(require_api_key)],
+)
+def export_meeting_result(meeting_id: str) -> JSONResponse:
+    result = _results.get(meeting_id)
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Meeting result not found",
+        )
+    logger.info("meeting_exported", meeting_id=meeting_id)
+    encoded_filename = quote(f"meeting-{meeting_id}.json", safe="")
+    return JSONResponse(
+        content=result.model_dump(mode="json"),
+        headers={
+            "Cache-Control": "private, no-store",
+            "Content-Disposition": (
+                'attachment; filename="meeting-export.json"; '
+                f"filename*=UTF-8''{encoded_filename}"
+            ),
+            "Vary": "X-API-Key",
+        },
+    )
 
 
 @app.delete(
