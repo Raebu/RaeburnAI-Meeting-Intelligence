@@ -43,6 +43,7 @@ app.add_middleware(
 
 _engine = MeetingIntelligenceEngine()
 _results: dict[str, MeetingIntelligenceResult] = {}
+_result_stored_at: dict[str, float] = {}
 _rate_window: dict[str, deque[float]] = defaultdict(deque)
 _meeting_locks: defaultdict[str, Lock] = defaultdict(Lock)
 
@@ -86,6 +87,22 @@ def _approval_targets(
             detail="Only pending commands can be approved or rejected",
         )
     return targets
+
+
+def _stored_result(meeting_id: str) -> MeetingIntelligenceResult | None:
+    """Return a non-expired stored result, purging data past its retention window."""
+    result = _results.get(meeting_id)
+    if result is None:
+        return None
+
+    stored_at = _result_stored_at.get(meeting_id)
+    retention_seconds = get_settings().meeting_retention_seconds
+    if stored_at is None or time.time() - stored_at >= retention_seconds:
+        _results.pop(meeting_id, None)
+        _result_stored_at.pop(meeting_id, None)
+        logger.info("meeting_retention_expired", meeting_ref=_safe_ref(meeting_id))
+        return None
+    return result
 
 
 @app.middleware("http")
@@ -163,6 +180,7 @@ def analyse_meeting(request: MeetingAnalyseRequest) -> MeetingIntelligenceResult
             command.approval_status = ApprovalStatus.approved
     with _meeting_locks[request.meeting_id]:
         _results[request.meeting_id] = result.model_copy(deep=True)
+        _result_stored_at[request.meeting_id] = time.time()
     logger.info(
         "meeting_analyzed",
         meeting_ref=_safe_ref(request.meeting_id),
@@ -179,7 +197,7 @@ def analyse_meeting(request: MeetingAnalyseRequest) -> MeetingIntelligenceResult
 )
 def get_meeting_result(meeting_id: str) -> MeetingIntelligenceResult:
     with _meeting_locks[meeting_id]:
-        result = _results.get(meeting_id)
+        result = _stored_result(meeting_id)
         if not result:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -195,7 +213,7 @@ def get_meeting_result(meeting_id: str) -> MeetingIntelligenceResult:
 )
 def export_meeting_result(meeting_id: str) -> JSONResponse:
     with _meeting_locks[meeting_id]:
-        result = _results.get(meeting_id)
+        result = _stored_result(meeting_id)
         if not result:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -224,12 +242,13 @@ def export_meeting_result(meeting_id: str) -> JSONResponse:
 )
 def delete_meeting_result(meeting_id: str) -> Response:
     with _meeting_locks[meeting_id]:
-        if meeting_id not in _results:
+        if _stored_result(meeting_id) is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Meeting result not found",
             )
         del _results[meeting_id]
+        _result_stored_at.pop(meeting_id, None)
     logger.info("meeting_deleted", meeting_ref=_safe_ref(meeting_id))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -243,7 +262,7 @@ def approve_commands(
     meeting_id: str, approval: ApprovalRequest
 ) -> MeetingIntelligenceResult:
     with _meeting_locks[meeting_id]:
-        result = _results.get(meeting_id)
+        result = _stored_result(meeting_id)
         if not result:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -271,7 +290,7 @@ def reject_commands(
     meeting_id: str, approval: ApprovalRequest
 ) -> MeetingIntelligenceResult:
     with _meeting_locks[meeting_id]:
-        result = _results.get(meeting_id)
+        result = _stored_result(meeting_id)
         if not result:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
