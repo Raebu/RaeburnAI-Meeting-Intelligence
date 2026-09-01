@@ -66,6 +66,9 @@ class Settings(BaseSettings):
         default=False, alias="WEBHOOK_WRITEBACK_ENABLED"
     )
     webhook_url: str | None = Field(default=None, alias="WEBHOOK_URL")
+    webhook_signing_secret: str | None = Field(
+        default=None, alias="WEBHOOK_SIGNING_SECRET"
+    )
 
     @property
     def cors_origin_list(self) -> list[str]:
