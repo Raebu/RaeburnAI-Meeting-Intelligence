@@ -153,7 +153,7 @@ def export_meeting_result(meeting_id: str) -> JSONResponse:
         headers={
             "Cache-Control": "private, no-store",
             "Content-Disposition": (
-                "attachment; filename=\"meeting-export.json\"; "
+                'attachment; filename="meeting-export.json"; '
                 f"filename*=UTF-8''{encoded_filename}"
             ),
             "Vary": "X-API-Key",
