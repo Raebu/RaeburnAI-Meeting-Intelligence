@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import time
 from collections import defaultdict, deque
 from collections.abc import Awaitable, Callable
@@ -44,6 +45,18 @@ _results: dict[str, MeetingIntelligenceResult] = {}
 _rate_window: dict[str, deque[float]] = defaultdict(deque)
 
 
+def _safe_ref(value: str) -> str:
+    """Return a stable non-reversible reference suitable for operational logs."""
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
+
+
+def _safe_route_path(request: Request) -> str:
+    """Return the route template without logging user-controlled path parameters."""
+    route = request.scope.get("route")
+    route_path = getattr(route, "path", None)
+    return route_path if isinstance(route_path, str) else "unresolved"
+
+
 @app.middleware("http")
 async def rate_limit_and_audit(
     request: Request, call_next: Callable[[Request], Awaitable[Response]]
@@ -54,14 +67,18 @@ async def rate_limit_and_audit(
     while window and now - window[0] > 60:
         window.popleft()
     if len(window) >= settings.rate_limit_per_minute:
-        logger.warning("rate_limit_exceeded", client=client, path=request.url.path)
+        logger.warning(
+            "rate_limit_exceeded",
+            client_ref=_safe_ref(client),
+            route=_safe_route_path(request),
+        )
         return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"})
     window.append(now)
     response = await call_next(request)
     logger.info(
         "request_completed",
         method=request.method,
-        path=request.url.path,
+        route=_safe_route_path(request),
         status_code=response.status_code,
     )
     return response
@@ -69,7 +86,11 @@ async def rate_limit_and_audit(
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    logger.exception("unhandled_exception", path=request.url.path, error=str(exc))
+    logger.error(
+        "unhandled_exception",
+        route=_safe_route_path(request),
+        error_type=type(exc).__name__,
+    )
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
@@ -112,7 +133,7 @@ def analyse_meeting(request: MeetingAnalyseRequest) -> MeetingIntelligenceResult
     _results[request.meeting_id] = result
     logger.info(
         "meeting_analyzed",
-        meeting_id=request.meeting_id,
+        meeting_ref=_safe_ref(request.meeting_id),
         decisions=len(result.decisions),
         actions=len(result.action_items),
     )
@@ -146,7 +167,7 @@ def export_meeting_result(meeting_id: str) -> JSONResponse:
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Meeting result not found",
         )
-    logger.info("meeting_exported", meeting_id=meeting_id)
+    logger.info("meeting_exported", meeting_ref=_safe_ref(meeting_id))
     encoded_filename = quote(f"meeting-{meeting_id}.json", safe="")
     return JSONResponse(
         content=result.model_dump(mode="json"),
@@ -173,7 +194,7 @@ def delete_meeting_result(meeting_id: str) -> Response:
             detail="Meeting result not found",
         )
     del _results[meeting_id]
-    logger.info("meeting_deleted", meeting_id=meeting_id)
+    logger.info("meeting_deleted", meeting_ref=_safe_ref(meeting_id))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -198,8 +219,8 @@ def approve_commands(
     result.audit_events.append(f"commands.approved_by:{approval.approved_by}")
     logger.info(
         "commands_approved",
-        meeting_id=meeting_id,
-        approved_by=approval.approved_by,
+        meeting_ref=_safe_ref(meeting_id),
+        actor_ref=_safe_ref(approval.approved_by),
     )
     return result
 
@@ -225,7 +246,7 @@ def reject_commands(
     result.audit_events.append(f"commands.rejected_by:{approval.approved_by}")
     logger.info(
         "commands_rejected",
-        meeting_id=meeting_id,
-        rejected_by=approval.approved_by,
+        meeting_ref=_safe_ref(meeting_id),
+        actor_ref=_safe_ref(approval.approved_by),
     )
     return result
