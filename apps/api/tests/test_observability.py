@@ -8,13 +8,13 @@ from meeting_intelligence.observability import (
 
 
 def test_metrics_exclude_unapproved_high_cardinality_labels() -> None:
-    secret_transcript = "customer said their password is swordfish"
+    transcript_text = "customer discussed a confidential account detail"
     increment(
         "requests_total",
         method="GET",
         route="/healthz",
         status="200",
-        transcript=secret_transcript,
+        transcript=transcript_text,
         workspace_id="private-workspace",
     )
     observe(
@@ -23,12 +23,12 @@ def test_metrics_exclude_unapproved_high_cardinality_labels() -> None:
         method="GET",
         route="/healthz",
         status="200",
-        transcript=secret_transcript,
+        transcript=transcript_text,
     )
     rendered = prometheus_metrics()
     assert "requests_total" in rendered
     assert "request_duration_ms_count" in rendered
-    assert secret_transcript not in rendered
+    assert transcript_text not in rendered
     assert "private-workspace" not in rendered
 
 
