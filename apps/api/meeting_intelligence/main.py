@@ -9,11 +9,17 @@ from urllib.parse import quote
 from uuid import uuid4
 
 import structlog
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from meeting_intelligence.config import Settings, get_settings
+from meeting_intelligence.auth import (
+    Principal,
+    WorkspaceRole,
+    authenticate_principal,
+    require_role,
+)
+from meeting_intelligence.config import get_settings
 from meeting_intelligence.intelligence import MeetingIntelligenceEngine
 from meeting_intelligence.schemas import (
     ApprovalRequest,
@@ -71,9 +77,9 @@ def _request_id(request: Request) -> str:
     return value if isinstance(value, str) else "unavailable"
 
 
-def _meeting_lock(meeting_id: str) -> Lock:
-    """Map arbitrary meeting IDs onto a fixed lock pool without retaining the IDs."""
-    digest = hashlib.sha256(meeting_id.encode("utf-8")).digest()
+def _meeting_lock(workspace_id: str, meeting_id: str) -> Lock:
+    """Map workspace/meeting IDs onto a fixed lock pool without retaining the IDs."""
+    digest = hashlib.sha256(f"{workspace_id}:{meeting_id}".encode()).digest()
     stripe = int.from_bytes(digest[:8], byteorder="big") % _MEETING_LOCK_STRIPE_COUNT
     return _meeting_lock_stripes[stripe]
 
@@ -107,9 +113,11 @@ def _approval_targets(
     return targets
 
 
-def _stored_result(meeting_id: str) -> MeetingIntelligenceResult | None:
-    """Return a non-expired durable meeting result."""
-    return _store.get(meeting_id)
+def _stored_result(
+    workspace_id: str, meeting_id: str
+) -> MeetingIntelligenceResult | None:
+    """Return a non-expired durable meeting result scoped to one workspace."""
+    return _store.get(meeting_id, workspace_id=workspace_id)
 
 
 def _consume_rate_limit(client: str, now: float) -> bool:
@@ -192,16 +200,6 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
-def require_api_key(
-    x_api_key: str | None = Header(default=None),
-    app_settings: Settings = Depends(get_settings),
-) -> None:
-    if x_api_key != app_settings.api_key:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key"
-        )
-
-
 @app.get("/healthz", response_model=HealthResponse)
 def healthz() -> HealthResponse:
     return HealthResponse(
@@ -221,22 +219,40 @@ def readyz() -> HealthResponse:
     )
 
 
-@app.post(
-    "/v1/meetings/analyse",
-    response_model=MeetingIntelligenceResult,
-    dependencies=[Depends(require_api_key)],
-)
-def analyse_meeting(request: MeetingAnalyseRequest) -> MeetingIntelligenceResult:
+@app.get("/v1/auth/me", response_model=Principal)
+def current_principal(
+    principal: Principal = Depends(authenticate_principal),
+) -> Principal:
+    return principal
+
+
+@app.post("/v1/meetings/analyse", response_model=MeetingIntelligenceResult)
+def analyse_meeting(
+    request: MeetingAnalyseRequest,
+    principal: Principal = Depends(require_role(WorkspaceRole.operator)),
+) -> MeetingIntelligenceResult:
     result = _engine.analyse(request)
     app_settings = get_settings()
     require_approval = app_settings.approvals_required or bool(request.require_approval)
     if not require_approval:
         for command in result.integration_commands:
             command.approval_status = ApprovalStatus.approved
-    with _meeting_lock(request.meeting_id):
-        _store.put(request.meeting_id, result, reset_retention=True)
+    with _meeting_lock(principal.workspace_id, request.meeting_id):
+        try:
+            _store.put(
+                request.meeting_id,
+                result,
+                reset_retention=True,
+                workspace_id=principal.workspace_id,
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Meeting ID already belongs to another workspace",
+            ) from exc
     logger.info(
         "meeting_analyzed",
+        workspace_ref=_safe_ref(principal.workspace_id),
         meeting_ref=_safe_ref(request.meeting_id),
         decisions=len(result.decisions),
         actions=len(result.action_items),
@@ -244,14 +260,13 @@ def analyse_meeting(request: MeetingAnalyseRequest) -> MeetingIntelligenceResult
     return result
 
 
-@app.get(
-    "/v1/meetings/{meeting_id}",
-    response_model=MeetingIntelligenceResult,
-    dependencies=[Depends(require_api_key)],
-)
-def get_meeting_result(meeting_id: str) -> MeetingIntelligenceResult:
-    with _meeting_lock(meeting_id):
-        result = _stored_result(meeting_id)
+@app.get("/v1/meetings/{meeting_id}", response_model=MeetingIntelligenceResult)
+def get_meeting_result(
+    meeting_id: str,
+    principal: Principal = Depends(require_role(WorkspaceRole.viewer)),
+) -> MeetingIntelligenceResult:
+    with _meeting_lock(principal.workspace_id, meeting_id):
+        result = _stored_result(principal.workspace_id, meeting_id)
         if not result:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -260,21 +275,24 @@ def get_meeting_result(meeting_id: str) -> MeetingIntelligenceResult:
         return result.model_copy(deep=True)
 
 
-@app.get(
-    "/v1/meetings/{meeting_id}/export",
-    response_model=MeetingIntelligenceResult,
-    dependencies=[Depends(require_api_key)],
-)
-def export_meeting_result(meeting_id: str) -> JSONResponse:
-    with _meeting_lock(meeting_id):
-        result = _stored_result(meeting_id)
+@app.get("/v1/meetings/{meeting_id}/export", response_model=MeetingIntelligenceResult)
+def export_meeting_result(
+    meeting_id: str,
+    principal: Principal = Depends(require_role(WorkspaceRole.viewer)),
+) -> JSONResponse:
+    with _meeting_lock(principal.workspace_id, meeting_id):
+        result = _stored_result(principal.workspace_id, meeting_id)
         if not result:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Meeting result not found",
             )
         exported = result.model_dump(mode="json")
-    logger.info("meeting_exported", meeting_ref=_safe_ref(meeting_id))
+    logger.info(
+        "meeting_exported",
+        workspace_ref=_safe_ref(principal.workspace_id),
+        meeting_ref=_safe_ref(meeting_id),
+    )
     encoded_filename = quote(f"meeting-{meeting_id}.json", safe="")
     return JSONResponse(
         content=exported,
@@ -289,33 +307,34 @@ def export_meeting_result(meeting_id: str) -> JSONResponse:
     )
 
 
-@app.delete(
-    "/v1/meetings/{meeting_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_api_key)],
-)
-def delete_meeting_result(meeting_id: str) -> Response:
-    with _meeting_lock(meeting_id):
-        if _stored_result(meeting_id) is None:
+@app.delete("/v1/meetings/{meeting_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_meeting_result(
+    meeting_id: str,
+    principal: Principal = Depends(require_role(WorkspaceRole.admin)),
+) -> Response:
+    with _meeting_lock(principal.workspace_id, meeting_id):
+        if _stored_result(principal.workspace_id, meeting_id) is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Meeting result not found",
             )
-        _store.delete(meeting_id)
-    logger.info("meeting_deleted", meeting_ref=_safe_ref(meeting_id))
+        _store.delete(meeting_id, workspace_id=principal.workspace_id)
+    logger.info(
+        "meeting_deleted",
+        workspace_ref=_safe_ref(principal.workspace_id),
+        meeting_ref=_safe_ref(meeting_id),
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@app.post(
-    "/v1/approvals/{meeting_id}/approve",
-    response_model=MeetingIntelligenceResult,
-    dependencies=[Depends(require_api_key)],
-)
+@app.post("/v1/approvals/{meeting_id}/approve", response_model=MeetingIntelligenceResult)
 def approve_commands(
-    meeting_id: str, approval: ApprovalRequest
+    meeting_id: str,
+    approval: ApprovalRequest,
+    principal: Principal = Depends(require_role(WorkspaceRole.approver)),
 ) -> MeetingIntelligenceResult:
-    with _meeting_lock(meeting_id):
-        result = _stored_result(meeting_id)
+    with _meeting_lock(principal.workspace_id, meeting_id):
+        result = _stored_result(principal.workspace_id, meeting_id)
         if not result:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -324,27 +343,31 @@ def approve_commands(
         targets = _approval_targets(result, approval)
         for command in targets:
             command.approval_status = ApprovalStatus.approved
-        result.audit_events.append(f"commands.approved_by:{approval.approved_by}")
-        _store.put(meeting_id, result, reset_retention=False)
+        result.audit_events.append(f"commands.approved_by:{principal.subject}")
+        _store.put(
+            meeting_id,
+            result,
+            reset_retention=False,
+            workspace_id=principal.workspace_id,
+        )
         response_result = result.model_copy(deep=True)
     logger.info(
         "commands_approved",
+        workspace_ref=_safe_ref(principal.workspace_id),
         meeting_ref=_safe_ref(meeting_id),
-        actor_ref=_safe_ref(approval.approved_by),
+        actor_ref=_safe_ref(principal.subject),
     )
     return response_result
 
 
-@app.post(
-    "/v1/approvals/{meeting_id}/reject",
-    response_model=MeetingIntelligenceResult,
-    dependencies=[Depends(require_api_key)],
-)
+@app.post("/v1/approvals/{meeting_id}/reject", response_model=MeetingIntelligenceResult)
 def reject_commands(
-    meeting_id: str, approval: ApprovalRequest
+    meeting_id: str,
+    approval: ApprovalRequest,
+    principal: Principal = Depends(require_role(WorkspaceRole.approver)),
 ) -> MeetingIntelligenceResult:
-    with _meeting_lock(meeting_id):
-        result = _stored_result(meeting_id)
+    with _meeting_lock(principal.workspace_id, meeting_id):
+        result = _stored_result(principal.workspace_id, meeting_id)
         if not result:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -353,12 +376,18 @@ def reject_commands(
         targets = _approval_targets(result, approval)
         for command in targets:
             command.approval_status = ApprovalStatus.rejected
-        result.audit_events.append(f"commands.rejected_by:{approval.approved_by}")
-        _store.put(meeting_id, result, reset_retention=False)
+        result.audit_events.append(f"commands.rejected_by:{principal.subject}")
+        _store.put(
+            meeting_id,
+            result,
+            reset_retention=False,
+            workspace_id=principal.workspace_id,
+        )
         response_result = result.model_copy(deep=True)
     logger.info(
         "commands_rejected",
+        workspace_ref=_safe_ref(principal.workspace_id),
         meeting_ref=_safe_ref(meeting_id),
-        actor_ref=_safe_ref(approval.approved_by),
+        actor_ref=_safe_ref(principal.subject),
     )
     return response_result
