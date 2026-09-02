@@ -22,6 +22,7 @@ from meeting_intelligence.schemas import (
     MeetingAnalyseRequest,
     MeetingIntelligenceResult,
 )
+from meeting_intelligence.security import apply_security_headers
 
 logger = structlog.get_logger(__name__)
 settings = get_settings()
@@ -143,6 +144,7 @@ def _consume_rate_limit(client: str, now: float) -> bool:
 async def rate_limit_and_audit(
     request: Request, call_next: Callable[[Request], Awaitable[Response]]
 ) -> Response:
+    app_settings = get_settings()
     client = request.client.host if request.client else "unknown"
     if not _consume_rate_limit(client, time.monotonic()):
         logger.warning(
@@ -150,7 +152,10 @@ async def rate_limit_and_audit(
             client_ref=_safe_ref(client),
             route=_safe_route_path(request),
         )
-        return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"})
+        return apply_security_headers(
+            JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"}),
+            app_settings,
+        )
     response = await call_next(request)
     logger.info(
         "request_completed",
@@ -158,7 +163,7 @@ async def rate_limit_and_audit(
         route=_safe_route_path(request),
         status_code=response.status_code,
     )
-    return response
+    return apply_security_headers(response, app_settings)
 
 
 @app.exception_handler(Exception)
