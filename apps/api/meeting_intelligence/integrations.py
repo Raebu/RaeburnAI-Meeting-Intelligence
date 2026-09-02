@@ -397,8 +397,13 @@ class EmailAdapter(IntegrationAdapter):
                 status="failed",
                 detail="email body is required",
             )
-        if not isinstance(recipients, list) or not recipients or not all(
-            isinstance(recipient, str) and recipient.strip() for recipient in recipients
+        if (
+            not isinstance(recipients, list)
+            or not recipients
+            or not all(
+                isinstance(recipient, str) and recipient.strip()
+                for recipient in recipients
+            )
         ):
             return DispatchResult(
                 system=self.system,
