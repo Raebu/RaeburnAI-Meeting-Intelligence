@@ -156,7 +156,9 @@ class Settings(BaseSettings):
                 if system not in {"github", "jira", "crm", "email", "webhook"}:
                     raise ValueError(f"unsupported workspace integration: {system}")
                 if not isinstance(config, dict):
-                    raise ValueError("workspace integration configs must be JSON objects")
+                    raise ValueError(
+                        "workspace integration configs must be JSON objects"
+                    )
 
         if self.environment != "production":
             return self
