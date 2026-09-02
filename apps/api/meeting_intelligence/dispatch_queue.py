@@ -33,8 +33,12 @@ class DispatchJobRecord(Base):
     next_attempt_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -171,9 +175,7 @@ class DispatchQueue:
                 record.status = DispatchStatus.dead_letter.value
             else:
                 record.status = DispatchStatus.queued.value
-                delay = self._base_backoff_seconds * (
-                    2 ** max(record.attempts - 1, 0)
-                )
+                delay = self._base_backoff_seconds * (2 ** max(record.attempts - 1, 0))
                 record.next_attempt_at = now + timedelta(seconds=min(delay, 3600))
             session.commit()
             return DispatchStatus(record.status)
