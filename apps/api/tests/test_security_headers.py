@@ -7,8 +7,7 @@ from meeting_intelligence.security import apply_security_headers
 
 
 def test_api_responses_include_browser_security_headers() -> None:
-    client = TestClient(app, client=("security-headers-test", 50000))
-    response = client.get("/healthz")
+    response = TestClient(app).get("/healthz")
 
     assert response.status_code == 200
     assert response.headers["x-content-type-options"] == "nosniff"
@@ -25,6 +24,9 @@ def test_production_security_headers_enable_hsts() -> None:
         RAEBURN_ENV="production",
         RAEBURN_API_KEY="a" * 32,
         RAEBURN_PUBLIC_BASE_URL="https://meeting.example.com",
+        DATABASE_URL=(
+            "postgresql+psycopg://meeting-intelligence@db.example.com/meeting_intelligence"
+        ),
     )
 
     response = apply_security_headers(Response(), production)
