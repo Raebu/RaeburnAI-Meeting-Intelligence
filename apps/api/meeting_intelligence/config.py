@@ -129,7 +129,9 @@ class Settings(BaseSettings):
                 )
         if self.llm_provider != "deterministic":
             if not self.openai_compatible_api_key:
-                raise ValueError("external LLM provider requires OPENAI_COMPATIBLE_API_KEY")
+                raise ValueError(
+                    "external LLM provider requires OPENAI_COMPATIBLE_API_KEY"
+                )
             if not self.openai_compatible_base_url.startswith("https://"):
                 raise ValueError(
                     "production external LLM provider requires an HTTPS OPENAI_COMPATIBLE_BASE_URL"
