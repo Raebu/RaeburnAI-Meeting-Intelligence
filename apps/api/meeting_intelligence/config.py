@@ -107,7 +107,9 @@ class Settings(BaseSettings):
                     "Jira writeback requires base URL, email, API token and project key"
                 )
             if not self.jira_base_url or not self.jira_base_url.startswith("https://"):
-                raise ValueError("production Jira writeback requires an HTTPS JIRA_BASE_URL")
+                raise ValueError(
+                    "production Jira writeback requires an HTTPS JIRA_BASE_URL"
+                )
         if self.crm_writeback_enabled:
             raise ValueError(
                 "production CRM writeback is not implemented; keep CRM_WRITEBACK_ENABLED=false"
