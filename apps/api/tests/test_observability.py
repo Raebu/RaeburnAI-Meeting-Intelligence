@@ -1,4 +1,10 @@
-from meeting_intelligence.observability import increment, observe, prometheus_metrics, safe_ref, trace_span
+from meeting_intelligence.observability import (
+    increment,
+    observe,
+    prometheus_metrics,
+    safe_ref,
+    trace_span,
+)
 
 
 def test_metrics_exclude_unapproved_high_cardinality_labels() -> None:
