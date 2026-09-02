@@ -47,7 +47,9 @@ def _configured_principals(settings: Settings) -> dict[str, Principal]:
         workspace_id = value.get("workspace_id")
         role = value.get("role")
         subject = value.get("subject")
-        if not all(isinstance(item, str) and item for item in (workspace_id, role, subject)):
+        if not all(
+            isinstance(item, str) and item for item in (workspace_id, role, subject)
+        ):
             raise RuntimeError(
                 "workspace API-key entries require workspace_id, role and subject"
             )
