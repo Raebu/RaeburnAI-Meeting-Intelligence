@@ -371,7 +371,11 @@ class EmailAdapter(IntegrationAdapter):
         password = _config_string(self.workspace_config, "password")
         from_address = _config_string(self.workspace_config, "from_address")
         raw_port = self.workspace_config.get("port")
-        port = raw_port if isinstance(raw_port, int) and not isinstance(raw_port, bool) else None
+        port = (
+            raw_port
+            if isinstance(raw_port, int) and not isinstance(raw_port, bool)
+            else None
+        )
         if not host or not username or not password or not from_address or port is None:
             return DispatchResult(
                 system=self.system,
@@ -390,7 +394,12 @@ class EmailAdapter(IntegrationAdapter):
         subject = command.payload.get("subject")
         body = command.payload.get("body")
         recipients = command.payload.get("recipients")
-        if not isinstance(subject, str) or not subject or "\r" in subject or "\n" in subject:
+        if (
+            not isinstance(subject, str)
+            or not subject
+            or "\r" in subject
+            or "\n" in subject
+        ):
             return DispatchResult(
                 system=self.system,
                 operation=command.operation,
@@ -407,7 +416,10 @@ class EmailAdapter(IntegrationAdapter):
         if (
             not isinstance(recipients, list)
             or not recipients
-            or not all(isinstance(item, str) and _valid_email_address(item) for item in recipients)
+            or not all(
+                isinstance(item, str) and _valid_email_address(item)
+                for item in recipients
+            )
         ):
             return DispatchResult(
                 system=self.system,
