@@ -20,9 +20,7 @@ def test_analysis_materializes_native_work_and_tracks_outcome() -> None:
         "context": {},
     }
 
-    analysed = client.post(
-        "/v1/meetings/analyse", headers=API_HEADERS, json=payload
-    )
+    analysed = client.post("/v1/meetings/analyse", headers=API_HEADERS, json=payload)
     assert analysed.status_code == 200
 
     decisions = client.get(
@@ -50,9 +48,7 @@ def test_analysis_materializes_native_work_and_tracks_outcome() -> None:
     assert completed.json()["status"] == "done"
     assert completed.json()["outcome"] == "Released to production"
 
-    reanalysed = client.post(
-        "/v1/meetings/analyse", headers=API_HEADERS, json=payload
-    )
+    reanalysed = client.post("/v1/meetings/analyse", headers=API_HEADERS, json=payload)
     assert reanalysed.status_code == 200
     reloaded = client.get(
         "/v1/native/actions",
