@@ -80,7 +80,7 @@ class Settings(BaseSettings):
     )
 
     @model_validator(mode="after")
-    def validate_settings(self) -> "Settings":
+    def validate_settings(self) -> Settings:
         if not self.bootstrap_workspace_id.strip():
             raise ValueError("RAEBURN_BOOTSTRAP_WORKSPACE_ID cannot be empty")
         try:
