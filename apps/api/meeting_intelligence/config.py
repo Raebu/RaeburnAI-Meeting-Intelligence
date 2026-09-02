@@ -103,7 +103,9 @@ class Settings(BaseSettings):
             raise ValueError("RAEBURN_WORKSPACE_API_KEYS must be a JSON object")
         for key, value in workspace_keys.items():
             if not isinstance(key, str) or not isinstance(value, dict):
-                raise ValueError("workspace API-key entries must map strings to objects")
+                raise ValueError(
+                    "workspace API-key entries must map strings to objects"
+                )
             if self.environment == "production" and len(key) < 32:
                 raise ValueError(
                     "production workspace API keys must be at least 32 characters"
