@@ -8,6 +8,7 @@ from meeting_intelligence.config import Settings, get_settings
 from meeting_intelligence.dispatch_queue import DispatchQueue
 from meeting_intelligence.integrations import (
     GitHubIssueAdapter,
+    HubSpotAdapter,
     IntegrationAdapter,
     JiraAdapter,
     WebhookAdapter,
@@ -16,13 +17,18 @@ from meeting_intelligence.integrations import (
 logger = structlog.get_logger(__name__)
 
 
-def _adapter_for(settings: Settings, system: str) -> IntegrationAdapter:
+def _adapter_for(
+    settings: Settings, workspace_id: str, system: str
+) -> IntegrationAdapter:
+    workspace_config = settings.integration_config(workspace_id, system)
     if system == "github":
-        return GitHubIssueAdapter(settings)
+        return GitHubIssueAdapter(settings, workspace_config)
     if system == "jira":
-        return JiraAdapter(settings)
+        return JiraAdapter(settings, workspace_config)
+    if system == "crm":
+        return HubSpotAdapter(settings, workspace_config)
     if system == "webhook":
-        return WebhookAdapter(settings)
+        return WebhookAdapter(settings, workspace_config)
     raise ValueError(f"unsupported integration system: {system}")
 
 
@@ -33,7 +39,7 @@ async def run_once(queue: DispatchQueue, settings: Settings) -> bool:
     if job is None:
         return False
     try:
-        adapter = _adapter_for(settings, job.command.system)
+        adapter = _adapter_for(settings, job.workspace_id, job.command.system)
         result = await adapter.dispatch(job.command)
         if result.status == "dispatched":
             queue.succeed(job.id, result)
