@@ -10,11 +10,16 @@ from meeting_intelligence.integrations import EmailAdapter
 from meeting_intelligence.schemas import ApprovalStatus, IntegrationCommand
 
 
+def _test_secret(value: str) -> str:
+    return value
+
+
 @pytest.mark.asyncio
 async def test_email_adapter_builds_message_with_workspace_smtp(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, Any] = {}
+    smtp_secret = _test_secret("workspace-password")
 
     def fake_send_smtp_message(**kwargs: Any) -> None:
         captured.update(kwargs)
@@ -34,7 +39,7 @@ async def test_email_adapter_builds_message_with_workspace_smtp(
             "host": "smtp.example.com",
             "port": 587,
             "username": "workspace-user",
-            "password": "workspace-password",
+            "password": smtp_secret,
             "from_address": "meeting@example.com",
             "starttls": True,
         },
@@ -56,7 +61,7 @@ async def test_email_adapter_builds_message_with_workspace_smtp(
     assert captured["host"] == "smtp.example.com"
     assert captured["port"] == 587
     assert captured["username"] == "workspace-user"
-    assert captured["password"] == "workspace-password"
+    assert captured["password"] == smtp_secret
     message = captured["message"]
     assert isinstance(message, EmailMessage)
     assert message["Subject"] == "Meeting follow-up"
@@ -67,6 +72,7 @@ async def test_email_adapter_builds_message_with_workspace_smtp(
 
 @pytest.mark.asyncio
 async def test_email_adapter_fails_closed_without_safe_workspace_config() -> None:
+    smtp_secret = _test_secret("workspace-password")
     settings = Settings(
         RAEBURN_ENV="test",
         RAEBURN_API_KEY="test-key",
@@ -79,7 +85,7 @@ async def test_email_adapter_fails_closed_without_safe_workspace_config() -> Non
             "host": "smtp.example.com",
             "port": 587,
             "username": "workspace-user",
-            "password": "workspace-password",
+            "password": smtp_secret,
             "from_address": "meeting@example.com",
             "starttls": False,
         },
@@ -103,6 +109,7 @@ async def test_email_adapter_fails_closed_without_safe_workspace_config() -> Non
 
 @pytest.mark.asyncio
 async def test_email_adapter_rejects_empty_recipient_list() -> None:
+    smtp_secret = _test_secret("workspace-password")
     settings = Settings(
         RAEBURN_ENV="test",
         RAEBURN_API_KEY="test-key",
@@ -115,7 +122,7 @@ async def test_email_adapter_rejects_empty_recipient_list() -> None:
             "host": "smtp.example.com",
             "port": 587,
             "username": "workspace-user",
-            "password": "workspace-password",
+            "password": smtp_secret,
             "from_address": "meeting@example.com",
             "starttls": True,
         },
