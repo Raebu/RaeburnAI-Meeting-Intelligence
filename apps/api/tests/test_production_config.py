@@ -36,7 +36,10 @@ def production_settings(**overrides: object) -> Settings:
         ({"GITHUB_WRITEBACK_ENABLED": True}, "workspace-scoped credentials"),
         ({"JIRA_WRITEBACK_ENABLED": True}, "workspace-scoped credentials"),
         ({"CRM_WRITEBACK_ENABLED": True}, "workspace-scoped credentials"),
-        ({"EMAIL_FOLLOWUP_ENABLED": True}, "workspace-scoped credentials"),
+        (
+            {"EMAIL_FOLLOWUP_ENABLED": True},
+            "email follow-up is not implemented",
+        ),
         ({"WEBHOOK_WRITEBACK_ENABLED": True}, "workspace-scoped credentials"),
         ({"LLM_PROVIDER": "openai-compatible"}, "OPENAI_COMPATIBLE_API_KEY"),
     ],
@@ -56,6 +59,33 @@ def test_production_rejects_unsupported_crm_provider() -> None:
             CRM_PROVIDER="salesforce",
             RAEBURN_WORKSPACE_INTEGRATIONS=json.dumps(
                 {"customer-a": {"crm": {"api_key": TEST_CREDENTIAL}}}
+            ),
+        )
+
+
+def test_production_rejects_incomplete_workspace_integration_config() -> None:
+    with pytest.raises(ValidationError, match="default_repository"):
+        production_settings(
+            GITHUB_WRITEBACK_ENABLED=True,
+            RAEBURN_WORKSPACE_INTEGRATIONS=json.dumps(
+                {"customer-a": {"github": {"token": TEST_CREDENTIAL}}}
+            ),
+        )
+
+
+def test_production_rejects_insecure_workspace_webhook() -> None:
+    with pytest.raises(ValidationError, match="must use HTTPS"):
+        production_settings(
+            WEBHOOK_WRITEBACK_ENABLED=True,
+            RAEBURN_WORKSPACE_INTEGRATIONS=json.dumps(
+                {
+                    "customer-a": {
+                        "webhook": {
+                            "url": "http://hooks.example.com/events",
+                            "signing_secret": TEST_CREDENTIAL,
+                        }
+                    }
+                }
             ),
         )
 
@@ -83,12 +113,6 @@ def test_production_accepts_workspace_scoped_writeback_configuration() -> None:
                 "project_key": "RAE",
             },
             "crm": {"api_key": TEST_CREDENTIAL},
-            "email": {
-                "host": "smtp.example.com",
-                "username": "automation@example.com",
-                "password": TEST_CREDENTIAL,
-                "from_address": "automation@example.com",
-            },
             "webhook": {
                 "url": "https://hooks.example.com/events",
                 "signing_secret": TEST_CREDENTIAL,
@@ -99,7 +123,6 @@ def test_production_accepts_workspace_scoped_writeback_configuration() -> None:
         GITHUB_WRITEBACK_ENABLED=True,
         JIRA_WRITEBACK_ENABLED=True,
         CRM_WRITEBACK_ENABLED=True,
-        EMAIL_FOLLOWUP_ENABLED=True,
         WEBHOOK_WRITEBACK_ENABLED=True,
         RAEBURN_WORKSPACE_INTEGRATIONS=json.dumps(integrations),
         LLM_PROVIDER="openai-compatible",
@@ -108,4 +131,5 @@ def test_production_accepts_workspace_scoped_writeback_configuration() -> None:
 
     assert settings.environment == "production"
     assert settings.crm_writeback_enabled is True
+    assert settings.email_followup_enabled is False
     assert settings.integration_config("customer-a", "crm")["api_key"] == TEST_CREDENTIAL
