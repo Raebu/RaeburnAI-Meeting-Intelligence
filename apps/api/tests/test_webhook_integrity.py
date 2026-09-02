@@ -51,4 +51,4 @@ async def test_enabled_webhook_fails_closed_without_signing_secret() -> None:
     result = await WebhookAdapter(settings).dispatch(_command())
 
     assert result.status == "failed"
-    assert result.detail == "missing config"
+    assert result.detail == "missing workspace config"
