@@ -39,8 +39,12 @@ class NativeDecisionRecord(Base):
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
     evidence: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
 
 class NativeActionRecord(Base):
@@ -61,8 +65,12 @@ class NativeActionRecord(Base):
     evidence: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     outcome: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
 
 class NativeDecision(BaseModel):
@@ -210,7 +218,9 @@ class NativeWorkStore:
                 NativeDecisionRecord.workspace_id == workspace_id
             )
             if meeting_id is not None:
-                statement = statement.where(NativeDecisionRecord.meeting_id == meeting_id)
+                statement = statement.where(
+                    NativeDecisionRecord.meeting_id == meeting_id
+                )
             records = session.scalars(
                 statement.order_by(NativeDecisionRecord.updated_at.desc()).limit(500)
             ).all()
