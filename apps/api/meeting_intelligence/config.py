@@ -94,30 +94,48 @@ class Settings(BaseSettings):
             raise ValueError(
                 "GitHub writeback requires GITHUB_TOKEN and GITHUB_DEFAULT_REPOSITORY"
             )
-        if self.jira_writeback_enabled and not all(
-            [
-                self.jira_base_url,
-                self.jira_email,
-                self.jira_api_token,
-                self.jira_project_key,
-            ]
-        ):
+        if self.jira_writeback_enabled:
+            if not all(
+                [
+                    self.jira_base_url,
+                    self.jira_email,
+                    self.jira_api_token,
+                    self.jira_project_key,
+                ]
+            ):
+                raise ValueError(
+                    "Jira writeback requires base URL, email, API token and project key"
+                )
+            if not self.jira_base_url or not self.jira_base_url.startswith("https://"):
+                raise ValueError(
+                    "production Jira writeback requires an HTTPS JIRA_BASE_URL"
+                )
+        if self.crm_writeback_enabled:
             raise ValueError(
-                "Jira writeback requires base URL, email, API token and project key"
+                "production CRM writeback is not implemented; keep CRM_WRITEBACK_ENABLED=false"
             )
-        if self.crm_writeback_enabled and not self.crm_api_key:
-            raise ValueError("CRM writeback requires CRM_API_KEY")
+        if self.email_followup_enabled:
+            raise ValueError(
+                "production email follow-up is not implemented; keep EMAIL_FOLLOWUP_ENABLED=false"
+            )
         if self.webhook_writeback_enabled:
             if not self.webhook_url or not self.webhook_url.startswith("https://"):
                 raise ValueError(
                     "production webhook writeback requires an HTTPS WEBHOOK_URL"
                 )
-            if not self.webhook_signing_secret:
+            if not self.webhook_signing_secret or len(self.webhook_signing_secret) < 32:
                 raise ValueError(
-                    "production webhook writeback requires WEBHOOK_SIGNING_SECRET"
+                    "production WEBHOOK_SIGNING_SECRET must be at least 32 characters"
                 )
-        if self.llm_provider != "deterministic" and not self.openai_compatible_api_key:
-            raise ValueError("external LLM provider requires OPENAI_COMPATIBLE_API_KEY")
+        if self.llm_provider != "deterministic":
+            if not self.openai_compatible_api_key:
+                raise ValueError(
+                    "external LLM provider requires OPENAI_COMPATIBLE_API_KEY"
+                )
+            if not self.openai_compatible_base_url.startswith("https://"):
+                raise ValueError(
+                    "production external LLM provider requires an HTTPS OPENAI_COMPATIBLE_BASE_URL"
+                )
         return self
 
     @property
