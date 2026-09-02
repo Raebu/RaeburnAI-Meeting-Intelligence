@@ -25,26 +25,25 @@ class ExtractionQuality:
 
     @property
     def score(self) -> float:
-        return round(
-            (
-                self.decision_recall
-                + self.action_recall
-                + self.owner_recall
-                + self.system_recall
-                + self.precision_proxy
-            )
-            / 5,
-            4,
-        )
+        values = [
+            self.decision_recall,
+            self.action_recall,
+            self.owner_recall,
+            self.system_recall,
+            self.precision_proxy,
+        ]
+        return round(sum(values) / len(values), 4)
 
 
 def _recall(expected: tuple[str, ...], actual: list[str]) -> float:
     if not expected:
         return 1.0
+
     lowered = [value.lower() for value in actual]
-    matched = sum(
-        1 for fragment in expected if any(fragment.lower() in value for value in lowered)
-    )
+    matched = 0
+    for fragment in expected:
+        if any(fragment.lower() in value for value in lowered):
+            matched += 1
     return matched / len(expected)
 
 
@@ -52,12 +51,7 @@ def evaluate_extraction(
     result: MeetingIntelligenceResult,
     expectation: ExtractionExpectation,
 ) -> ExtractionQuality:
-    """Score extraction output without exposing transcript content in telemetry.
-
-    ``precision_proxy`` penalises unexpected decisions/actions relative to the
-    benchmark expectation. This is deliberately simple and deterministic so it
-    can run in CI without an external model or evaluation service.
-    """
+    """Score deterministic extraction output for release gating in CI."""
 
     decisions = [item.statement for item in result.decisions]
     actions = [item.description for item in result.action_items]
@@ -75,11 +69,10 @@ def evaluate_extraction(
     )
     actual_semantic_items = len(decisions) + len(actions)
     unexpected = max(actual_semantic_items - expected_semantic_items, 0)
-    precision_proxy = (
-        1.0
-        if actual_semantic_items == 0
-        else max(0.0, 1.0 - (unexpected / actual_semantic_items))
-    )
+
+    precision_proxy = 1.0
+    if actual_semantic_items:
+        precision_proxy = max(0.0, 1.0 - unexpected / actual_semantic_items)
 
     return ExtractionQuality(
         decision_recall=_recall(expectation.decision_fragments, decisions),
