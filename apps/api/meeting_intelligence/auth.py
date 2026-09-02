@@ -52,13 +52,13 @@ def _configured_principals(settings: Settings) -> dict[str, Principal]:
                 "workspace API-key entries require workspace_id, role and subject"
             )
         try:
-            parsed_role = WorkspaceRole(role)
+            parsed_role = WorkspaceRole(str(role))
         except ValueError as exc:
             raise RuntimeError(f"unsupported workspace role: {role}") from exc
         principals[api_key] = Principal(
-            workspace_id=workspace_id,
+            workspace_id=str(workspace_id),
             role=parsed_role,
-            subject=subject,
+            subject=str(subject),
         )
     return principals
 
