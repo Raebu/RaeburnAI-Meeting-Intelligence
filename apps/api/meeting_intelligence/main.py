@@ -330,6 +330,13 @@ def delete_meeting_result(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@app.get("/v1/approvals", response_model=list[MeetingIntelligenceResult])
+def list_pending_approvals(
+    principal: Principal = Depends(require_role(WorkspaceRole.approver)),
+) -> list[MeetingIntelligenceResult]:
+    return _store.list_pending_approvals(workspace_id=principal.workspace_id)
+
+
 @app.post(
     "/v1/approvals/{meeting_id}/approve", response_model=MeetingIntelligenceResult
 )
