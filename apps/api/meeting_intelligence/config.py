@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from functools import lru_cache
+from typing import Any
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -19,6 +20,9 @@ class Settings(BaseSettings):
     )
     workspace_api_keys_json: str = Field(
         default="{}", alias="RAEBURN_WORKSPACE_API_KEYS"
+    )
+    workspace_integrations_json: str = Field(
+        default="{}", alias="RAEBURN_WORKSPACE_INTEGRATIONS"
     )
     public_base_url: str = Field(
         default="http://localhost:3000", alias="RAEBURN_PUBLIC_BASE_URL"
@@ -91,16 +95,34 @@ class Settings(BaseSettings):
         default=None, alias="WEBHOOK_SIGNING_SECRET"
     )
 
+    @staticmethod
+    def _parse_object(raw: str, setting_name: str) -> dict[str, Any]:
+        try:
+            value = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"{setting_name} must be valid JSON") from exc
+        if not isinstance(value, dict):
+            raise ValueError(f"{setting_name} must be a JSON object")
+        return value
+
+    @staticmethod
+    def _require_strings(
+        config: dict[str, Any], system: str, keys: tuple[str, ...]
+    ) -> None:
+        if not all(
+            isinstance(config.get(key), str) and config.get(key) for key in keys
+        ):
+            joined = ", ".join(keys)
+            raise ValueError(f"production {system} workspace config requires {joined}")
+
     @model_validator(mode="after")
     def validate_settings(self) -> Settings:
         if not self.bootstrap_workspace_id.strip():
             raise ValueError("RAEBURN_BOOTSTRAP_WORKSPACE_ID cannot be empty")
-        try:
-            workspace_keys = json.loads(self.workspace_api_keys_json)
-        except json.JSONDecodeError as exc:
-            raise ValueError("RAEBURN_WORKSPACE_API_KEYS must be valid JSON") from exc
-        if not isinstance(workspace_keys, dict):
-            raise ValueError("RAEBURN_WORKSPACE_API_KEYS must be a JSON object")
+
+        workspace_keys = self._parse_object(
+            self.workspace_api_keys_json, "RAEBURN_WORKSPACE_API_KEYS"
+        )
         for key, value in workspace_keys.items():
             if not isinstance(key, str) or not isinstance(value, dict):
                 raise ValueError(
@@ -122,6 +144,22 @@ class Settings(BaseSettings):
             if value.get("role") not in {"viewer", "operator", "approver", "admin"}:
                 raise ValueError("unsupported workspace role")
 
+        workspace_integrations = self._parse_object(
+            self.workspace_integrations_json, "RAEBURN_WORKSPACE_INTEGRATIONS"
+        )
+        for workspace_id, integrations in workspace_integrations.items():
+            if not isinstance(workspace_id, str) or not workspace_id.strip():
+                raise ValueError("workspace integration IDs must be non-empty strings")
+            if not isinstance(integrations, dict):
+                raise ValueError("workspace integration entries must be JSON objects")
+            for system, config in integrations.items():
+                if system not in {"github", "jira", "crm", "email", "webhook"}:
+                    raise ValueError(f"unsupported workspace integration: {system}")
+                if not isinstance(config, dict):
+                    raise ValueError(
+                        "workspace integration configs must be JSON objects"
+                    )
+
         if self.environment != "production":
             return self
 
@@ -137,46 +175,61 @@ class Settings(BaseSettings):
             raise ValueError("production APPROVALS_REQUIRED must remain true")
         if not self.public_base_url.startswith("https://"):
             raise ValueError("production RAEBURN_PUBLIC_BASE_URL must use HTTPS")
-
-        if self.github_writeback_enabled and (
-            not self.github_token or not self.github_default_repository
-        ):
-            raise ValueError(
-                "GitHub writeback requires GITHUB_TOKEN and GITHUB_DEFAULT_REPOSITORY"
-            )
-        if self.jira_writeback_enabled:
-            if not all(
-                [
-                    self.jira_base_url,
-                    self.jira_email,
-                    self.jira_api_token,
-                    self.jira_project_key,
-                ]
-            ):
-                raise ValueError(
-                    "Jira writeback requires base URL, email, API token and project key"
-                )
-            if not self.jira_base_url or not self.jira_base_url.startswith("https://"):
-                raise ValueError(
-                    "production Jira writeback requires an HTTPS JIRA_BASE_URL"
-                )
-        if self.crm_writeback_enabled:
-            raise ValueError(
-                "production CRM writeback is not implemented; keep CRM_WRITEBACK_ENABLED=false"
-            )
         if self.email_followup_enabled:
             raise ValueError(
                 "production email follow-up is not implemented; keep EMAIL_FOLLOWUP_ENABLED=false"
             )
-        if self.webhook_writeback_enabled:
-            if not self.webhook_url or not self.webhook_url.startswith("https://"):
+
+        enabled_systems = {
+            "github": self.github_writeback_enabled,
+            "jira": self.jira_writeback_enabled,
+            "crm": self.crm_writeback_enabled,
+            "webhook": self.webhook_writeback_enabled,
+        }
+        for system, enabled in enabled_systems.items():
+            if not enabled:
+                continue
+            configs = [
+                value[system]
+                for value in workspace_integrations.values()
+                if isinstance(value, dict)
+                and system in value
+                and isinstance(value[system], dict)
+            ]
+            if not configs:
                 raise ValueError(
-                    "production webhook writeback requires an HTTPS WEBHOOK_URL"
+                    f"production {system} writeback requires workspace-scoped credentials"
                 )
-            if not self.webhook_signing_secret or len(self.webhook_signing_secret) < 32:
-                raise ValueError(
-                    "production WEBHOOK_SIGNING_SECRET must be at least 32 characters"
-                )
+            for config in configs:
+                if system == "github":
+                    self._require_strings(
+                        config, system, ("token", "default_repository")
+                    )
+                elif system == "jira":
+                    self._require_strings(
+                        config,
+                        system,
+                        ("base_url", "email", "api_token", "project_key"),
+                    )
+                    if not str(config["base_url"]).startswith("https://"):
+                        raise ValueError(
+                            "production jira workspace base_url must use HTTPS"
+                        )
+                elif system == "crm":
+                    self._require_strings(config, system, ("api_key",))
+                elif system == "webhook":
+                    self._require_strings(config, system, ("url", "signing_secret"))
+                    if not str(config["url"]).startswith("https://"):
+                        raise ValueError(
+                            "production webhook workspace url must use HTTPS"
+                        )
+                    if len(str(config["signing_secret"])) < 32:
+                        raise ValueError(
+                            "production webhook signing_secret must be at least 32 characters"
+                        )
+
+        if self.crm_writeback_enabled and self.crm_provider != "hubspot":
+            raise ValueError("production CRM provider must be hubspot")
         if self.llm_provider != "deterministic":
             if not self.openai_compatible_api_key:
                 raise ValueError(
@@ -193,6 +246,16 @@ class Settings(BaseSettings):
         return [
             origin.strip() for origin in self.cors_origins.split(",") if origin.strip()
         ]
+
+    def integration_config(self, workspace_id: str, system: str) -> dict[str, Any]:
+        workspaces = self._parse_object(
+            self.workspace_integrations_json, "RAEBURN_WORKSPACE_INTEGRATIONS"
+        )
+        workspace = workspaces.get(workspace_id, {})
+        if not isinstance(workspace, dict):
+            return {}
+        config = workspace.get(system, {})
+        return dict(config) if isinstance(config, dict) else {}
 
 
 @lru_cache(maxsize=1)
