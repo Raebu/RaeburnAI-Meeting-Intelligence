@@ -14,6 +14,7 @@ from meeting_intelligence.integrations import (
     JiraAdapter,
     WebhookAdapter,
 )
+from meeting_intelligence.observability import increment, safe_ref, trace_span
 
 logger = structlog.get_logger(__name__)
 
@@ -37,37 +38,45 @@ def _adapter_for(
 
 async def run_once(queue: DispatchQueue, settings: Settings) -> bool:
     """Dispatch at most one due job and persist its terminal/retry state."""
-    queue.recover_stale_running()
+    recovered = queue.recover_stale_running()
+    if recovered:
+        increment("dispatch_stale_recovered_total", outcome="recovered")
     job = queue.claim_next()
     if job is None:
         return False
+    system = job.command.system
+    increment("dispatch_claimed_total", system=system)
     try:
-        adapter = _adapter_for(settings, job.workspace_id, job.command.system)
-        result = await adapter.dispatch(job.command)
+        with trace_span("dispatch", system=system):
+            adapter = _adapter_for(settings, job.workspace_id, system)
+            result = await adapter.dispatch(job.command)
         if result.status == "dispatched":
             queue.succeed(job.id, result)
+            increment("dispatch_completed_total", system=system, outcome="succeeded")
             logger.info(
                 "dispatch_succeeded",
-                job_id=job.id,
-                workspace_id=job.workspace_id,
-                system=job.command.system,
+                job_ref=safe_ref(job.id),
+                workspace_ref=safe_ref(job.workspace_id),
+                system=system,
             )
         else:
             state = queue.fail(job.id, result.detail or result.status)
+            increment("dispatch_completed_total", system=system, outcome=state.value)
             logger.warning(
                 "dispatch_not_completed",
-                job_id=job.id,
-                workspace_id=job.workspace_id,
-                system=job.command.system,
+                job_ref=safe_ref(job.id),
+                workspace_ref=safe_ref(job.workspace_id),
+                system=system,
                 state=state.value,
             )
     except Exception as exc:
         state = queue.fail(job.id, type(exc).__name__)
+        increment("dispatch_completed_total", system=system, outcome=state.value)
         logger.warning(
             "dispatch_failed",
-            job_id=job.id,
-            workspace_id=job.workspace_id,
-            system=job.command.system,
+            job_ref=safe_ref(job.id),
+            workspace_ref=safe_ref(job.workspace_id),
+            system=system,
             error_type=type(exc).__name__,
             state=state.value,
         )
