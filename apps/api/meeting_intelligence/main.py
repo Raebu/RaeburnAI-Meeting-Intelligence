@@ -22,6 +22,13 @@ from meeting_intelligence.auth import (
 from meeting_intelligence.config import get_settings
 from meeting_intelligence.dispatch_queue import DispatchJob, DispatchQueue
 from meeting_intelligence.intelligence import MeetingIntelligenceEngine
+from meeting_intelligence.native_work import (
+    NativeAction,
+    NativeActionPatch,
+    NativeDecision,
+    NativeDecisionPatch,
+    NativeWorkStore,
+)
 from meeting_intelligence.schemas import (
     ApprovalRequest,
     ApprovalStatus,
@@ -39,16 +46,16 @@ app = FastAPI(
     title="RaeburnAI Meeting Intelligence API",
     version="0.1.0",
     description=(
-        "Meeting intelligence API for decisions, actions, owners and workflow "
-        "writebacks."
+        "Standalone meeting intelligence system of record for decisions, actions, "
+        "accountability and optional workflow writebacks."
     ),
 )
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
     allow_credentials=False,
-    allow_methods=["GET", "POST", "DELETE"],
-    allow_headers=["content-type", "x-api-key"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
+    allow_headers=["content-type", "x-api-key", "x-totp-code"],
 )
 
 _engine = MeetingIntelligenceEngine()
@@ -56,6 +63,7 @@ _store = MeetingResultStore(settings)
 _store.bootstrap_nonproduction_schema()
 _dispatch_queue = DispatchQueue(settings)
 _dispatch_queue.bootstrap_nonproduction_schema()
+_native_work = NativeWorkStore(settings)
 _rate_window: dict[str, deque[float]] = {}
 _rate_limit_lock = Lock()
 _MEETING_LOCK_STRIPE_COUNT = 256
@@ -212,10 +220,14 @@ def healthz() -> HealthResponse:
 
 @app.get("/readyz", response_model=HealthResponse)
 def readyz() -> HealthResponse:
-    if not _store.ready() or not _dispatch_queue.ready():
+    if (
+        not _store.ready()
+        or not _dispatch_queue.ready()
+        or not _native_work.ready()
+    ):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Persistence or dispatch layer is not ready",
+            detail="Persistence, native work or dispatch layer is not ready",
         )
     return HealthResponse(
         status="ready", service="meeting-intelligence-api", version="0.1.0"
@@ -248,6 +260,7 @@ def analyse_meeting(
                 reset_retention=True,
                 workspace_id=principal.workspace_id,
             )
+            _native_work.ingest(principal.workspace_id, result)
         except ValueError as exc:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -321,6 +334,7 @@ def delete_meeting_result(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Meeting result not found",
             )
+        _native_work.delete_meeting(principal.workspace_id, meeting_id)
         _store.delete(meeting_id, workspace_id=principal.workspace_id)
     logger.info(
         "meeting_deleted",
@@ -328,6 +342,52 @@ def delete_meeting_result(
         meeting_ref=_safe_ref(meeting_id),
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.get("/v1/native/decisions", response_model=list[NativeDecision])
+def list_native_decisions(
+    meeting_id: str | None = None,
+    principal: Principal = Depends(require_role(WorkspaceRole.viewer)),
+) -> list[NativeDecision]:
+    return _native_work.list_decisions(principal.workspace_id, meeting_id=meeting_id)
+
+
+@app.patch("/v1/native/decisions/{decision_id}", response_model=NativeDecision)
+def update_native_decision(
+    decision_id: str,
+    patch: NativeDecisionPatch,
+    principal: Principal = Depends(require_role(WorkspaceRole.operator)),
+) -> NativeDecision:
+    decision = _native_work.update_decision(principal.workspace_id, decision_id, patch)
+    if decision is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Native decision not found",
+        )
+    return decision
+
+
+@app.get("/v1/native/actions", response_model=list[NativeAction])
+def list_native_actions(
+    meeting_id: str | None = None,
+    principal: Principal = Depends(require_role(WorkspaceRole.viewer)),
+) -> list[NativeAction]:
+    return _native_work.list_actions(principal.workspace_id, meeting_id=meeting_id)
+
+
+@app.patch("/v1/native/actions/{action_id}", response_model=NativeAction)
+def update_native_action(
+    action_id: str,
+    patch: NativeActionPatch,
+    principal: Principal = Depends(require_role(WorkspaceRole.operator)),
+) -> NativeAction:
+    action = _native_work.update_action(principal.workspace_id, action_id, patch)
+    if action is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Native action not found",
+        )
+    return action
 
 
 @app.get("/v1/approvals", response_model=list[MeetingIntelligenceResult])
