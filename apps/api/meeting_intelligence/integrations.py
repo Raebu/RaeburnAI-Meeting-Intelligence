@@ -3,9 +3,12 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
+import smtplib
+import ssl
 import time
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
+from email.message import EmailMessage
 from typing import Any
 
 import httpx
@@ -100,6 +103,24 @@ def _signed_webhook_headers(
 def _config_string(config: Mapping[str, Any], key: str) -> str | None:
     value = config.get(key)
     return value if isinstance(value, str) and value else None
+
+
+def _send_smtp_message(
+    *,
+    host: str,
+    port: int,
+    username: str,
+    password: str,
+    message: EmailMessage,
+) -> None:
+    """Send one message using authenticated STARTTLS SMTP."""
+    context = ssl.create_default_context()
+    with smtplib.SMTP(host, port, timeout=20) as client:
+        client.ehlo()
+        client.starttls(context=context)
+        client.ehlo()
+        client.login(username, password)
+        client.send_message(message)
 
 
 class GitHubIssueAdapter(IntegrationAdapter):
@@ -313,6 +334,97 @@ class HubSpotAdapter(IntegrationAdapter):
             operation=command.operation,
             external_id=str(external_id) if external_id is not None else deal_id,
             url=f"https://app.hubspot.com/contacts/deal/{deal_id}",
+            status="dispatched",
+        )
+
+
+class EmailAdapter(IntegrationAdapter):
+    """Send an approved meeting follow-up using workspace SMTP credentials."""
+
+    system = "email"
+
+    def __init__(
+        self, settings: Settings, workspace_config: Mapping[str, Any] | None = None
+    ) -> None:
+        self.settings = settings
+        self.workspace_config = workspace_config or {}
+
+    async def dispatch(self, command: IntegrationCommand) -> DispatchResult:
+        if not self.settings.email_followup_enabled:
+            return DispatchResult(
+                system=self.system,
+                operation=command.operation,
+                status="skipped",
+                detail="disabled",
+            )
+
+        host = _config_string(self.workspace_config, "host")
+        username = _config_string(self.workspace_config, "username")
+        password = _config_string(self.workspace_config, "password")
+        from_address = _config_string(self.workspace_config, "from_address")
+        port = self.workspace_config.get("port")
+        if (
+            not host
+            or not username
+            or not password
+            or not from_address
+            or not isinstance(port, int)
+            or isinstance(port, bool)
+            or not 1 <= port <= 65535
+            or self.workspace_config.get("starttls") is not True
+        ):
+            return DispatchResult(
+                system=self.system,
+                operation=command.operation,
+                status="failed",
+                detail="missing or unsafe workspace config",
+            )
+
+        subject = command.payload.get("subject")
+        body = command.payload.get("body")
+        recipients = command.payload.get("recipients")
+        if not isinstance(subject, str) or not subject.strip():
+            return DispatchResult(
+                system=self.system,
+                operation=command.operation,
+                status="failed",
+                detail="email subject is required",
+            )
+        if not isinstance(body, str) or not body.strip():
+            return DispatchResult(
+                system=self.system,
+                operation=command.operation,
+                status="failed",
+                detail="email body is required",
+            )
+        if not isinstance(recipients, list) or not recipients or not all(
+            isinstance(recipient, str) and recipient.strip() for recipient in recipients
+        ):
+            return DispatchResult(
+                system=self.system,
+                operation=command.operation,
+                status="failed",
+                detail="at least one valid email recipient is required",
+            )
+
+        message = EmailMessage()
+        message["Subject"] = subject
+        message["From"] = from_address
+        message["To"] = ", ".join(recipients)
+        message.set_content(body)
+
+        await asyncio.to_thread(
+            _send_smtp_message,
+            host=host,
+            port=port,
+            username=username,
+            password=password,
+            message=message,
+        )
+        return DispatchResult(
+            system=self.system,
+            operation=command.operation,
+            external_id=str(command.id),
             status="dispatched",
         )
 
