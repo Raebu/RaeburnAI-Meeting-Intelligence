@@ -7,6 +7,7 @@ import structlog
 from meeting_intelligence.config import Settings, get_settings
 from meeting_intelligence.dispatch_queue import DispatchQueue
 from meeting_intelligence.integrations import (
+    EmailAdapter,
     GitHubIssueAdapter,
     HubSpotAdapter,
     IntegrationAdapter,
@@ -27,6 +28,8 @@ def _adapter_for(
         return JiraAdapter(settings, workspace_config)
     if system == "crm":
         return HubSpotAdapter(settings, workspace_config)
+    if system == "email":
+        return EmailAdapter(settings, workspace_config)
     if system == "webhook":
         return WebhookAdapter(settings, workspace_config)
     raise ValueError(f"unsupported integration system: {system}")
