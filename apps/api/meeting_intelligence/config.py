@@ -105,6 +105,12 @@ class Settings(BaseSettings):
             raise ValueError(f"{setting_name} must be a JSON object")
         return value
 
+    @staticmethod
+    def _require_strings(config: dict[str, Any], system: str, keys: tuple[str, ...]) -> None:
+        if not all(isinstance(config.get(key), str) and config.get(key) for key in keys):
+            joined = ", ".join(keys)
+            raise ValueError(f"production {system} workspace config requires {joined}")
+
     @model_validator(mode="after")
     def validate_settings(self) -> Settings:
         if not self.bootstrap_workspace_id.strip():
@@ -163,22 +169,52 @@ class Settings(BaseSettings):
             raise ValueError("production APPROVALS_REQUIRED must remain true")
         if not self.public_base_url.startswith("https://"):
             raise ValueError("production RAEBURN_PUBLIC_BASE_URL must use HTTPS")
+        if self.email_followup_enabled:
+            raise ValueError(
+                "production email follow-up is not implemented; keep EMAIL_FOLLOWUP_ENABLED=false"
+            )
 
         enabled_systems = {
             "github": self.github_writeback_enabled,
             "jira": self.jira_writeback_enabled,
             "crm": self.crm_writeback_enabled,
-            "email": self.email_followup_enabled,
             "webhook": self.webhook_writeback_enabled,
         }
         for system, enabled in enabled_systems.items():
-            if enabled and not any(
-                isinstance(config, dict) and system in config
-                for config in workspace_integrations.values()
-            ):
+            if not enabled:
+                continue
+            configs = [
+                value[system]
+                for value in workspace_integrations.values()
+                if isinstance(value, dict)
+                and system in value
+                and isinstance(value[system], dict)
+            ]
+            if not configs:
                 raise ValueError(
                     f"production {system} writeback requires workspace-scoped credentials"
                 )
+            for config in configs:
+                if system == "github":
+                    self._require_strings(config, system, ("token", "default_repository"))
+                elif system == "jira":
+                    self._require_strings(
+                        config,
+                        system,
+                        ("base_url", "email", "api_token", "project_key"),
+                    )
+                    if not str(config["base_url"]).startswith("https://"):
+                        raise ValueError("production jira workspace base_url must use HTTPS")
+                elif system == "crm":
+                    self._require_strings(config, system, ("api_key",))
+                elif system == "webhook":
+                    self._require_strings(config, system, ("url", "signing_secret"))
+                    if not str(config["url"]).startswith("https://"):
+                        raise ValueError("production webhook workspace url must use HTTPS")
+                    if len(str(config["signing_secret"])) < 32:
+                        raise ValueError(
+                            "production webhook signing_secret must be at least 32 characters"
+                        )
 
         if self.crm_writeback_enabled and self.crm_provider != "hubspot":
             raise ValueError("production CRM provider must be hubspot")
