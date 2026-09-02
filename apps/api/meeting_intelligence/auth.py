@@ -35,10 +35,21 @@ _TOTP_WINDOW = 1
 
 
 class Principal(BaseModel):
+    """Internal authenticated principal. Never serialize this model to clients."""
+
     workspace_id: str
     role: WorkspaceRole
     subject: str
     totp_secret: str | None = None
+
+
+class PrincipalResponse(BaseModel):
+    """Public principal representation with authentication secrets excluded."""
+
+    workspace_id: str
+    role: WorkspaceRole
+    subject: str
+
 
 
 def _configured_principals(settings: Settings) -> dict[str, Principal]:
