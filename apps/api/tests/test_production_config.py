@@ -11,6 +11,7 @@ BASE_PRODUCTION = {
     "RAEBURN_CORS_ORIGINS": "https://meeting.example.com",
     "DATABASE_URL": "postgresql+psycopg://user:pass@db/meeting_intelligence",
 }
+TEST_CREDENTIAL = "test-credential"
 
 
 def production_settings(**overrides: object) -> Settings:
@@ -44,7 +45,7 @@ def test_production_webhook_requires_https_and_signing_secret() -> None:
         production_settings(
             WEBHOOK_WRITEBACK_ENABLED=True,
             WEBHOOK_URL="http://hooks.example.com/events",
-            WEBHOOK_SIGNING_SECRET="secret",
+            WEBHOOK_SIGNING_SECRET=TEST_CREDENTIAL,
         )
 
     with pytest.raises(ValidationError, match="WEBHOOK_SIGNING_SECRET"):
@@ -57,20 +58,20 @@ def test_production_webhook_requires_https_and_signing_secret() -> None:
 def test_production_accepts_safe_writeback_configuration() -> None:
     settings = production_settings(
         GITHUB_WRITEBACK_ENABLED=True,
-        GITHUB_TOKEN="github-token",
+        GITHUB_TOKEN=TEST_CREDENTIAL,
         GITHUB_DEFAULT_REPOSITORY="Raebu/example",
         JIRA_WRITEBACK_ENABLED=True,
         JIRA_BASE_URL="https://jira.example.com",
         JIRA_EMAIL="automation@example.com",
-        JIRA_API_TOKEN="jira-token",
+        JIRA_API_TOKEN=TEST_CREDENTIAL,
         JIRA_PROJECT_KEY="RAE",
         CRM_WRITEBACK_ENABLED=True,
-        CRM_API_KEY="crm-token",
+        CRM_API_KEY=TEST_CREDENTIAL,
         WEBHOOK_WRITEBACK_ENABLED=True,
         WEBHOOK_URL="https://hooks.example.com/events",
-        WEBHOOK_SIGNING_SECRET="webhook-secret",
+        WEBHOOK_SIGNING_SECRET=TEST_CREDENTIAL,
         LLM_PROVIDER="openai-compatible",
-        OPENAI_COMPATIBLE_API_KEY="llm-token",
+        OPENAI_COMPATIBLE_API_KEY=TEST_CREDENTIAL,
     )
 
     assert settings.environment == "production"
