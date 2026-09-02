@@ -7,7 +7,9 @@ from meeting_intelligence.config import Settings, get_settings
 from meeting_intelligence.main import app
 
 
-def _settings_with_workspace_key(role: str, workspace_id: str, subject: str) -> tuple[Settings, str]:
+def _settings_with_workspace_key(
+    role: str, workspace_id: str, subject: str
+) -> tuple[Settings, str]:
     workspace_key = f"wk-{uuid4().hex}{uuid4().hex}"
     settings = Settings(
         RAEBURN_ENV="test",
