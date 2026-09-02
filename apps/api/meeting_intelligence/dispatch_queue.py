@@ -30,7 +30,9 @@ class DispatchJobRecord(Base):
     command_json: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    next_attempt_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -71,7 +73,9 @@ class DispatchQueue:
         except Exception:
             return False
 
-    def enqueue(self, workspace_id: str, meeting_id: str, command: IntegrationCommand) -> bool:
+    def enqueue(
+        self, workspace_id: str, meeting_id: str, command: IntegrationCommand
+    ) -> bool:
         if command.approval_status is not ApprovalStatus.approved:
             raise ValueError("only approved commands can be queued")
         now = datetime.now(UTC)
@@ -167,7 +171,9 @@ class DispatchQueue:
                 record.status = DispatchStatus.dead_letter.value
             else:
                 record.status = DispatchStatus.queued.value
-                delay = self._base_backoff_seconds * (2 ** max(record.attempts - 1, 0))
+                delay = self._base_backoff_seconds * (
+                    2 ** max(record.attempts - 1, 0)
+                )
                 record.next_attempt_at = now + timedelta(seconds=min(delay, 3600))
             session.commit()
             return DispatchStatus(record.status)
@@ -209,7 +215,9 @@ class DispatchQueue:
             session.commit()
             return True
 
-    def list_jobs(self, workspace_id: str, meeting_id: str | None = None) -> list[DispatchJob]:
+    def list_jobs(
+        self, workspace_id: str, meeting_id: str | None = None
+    ) -> list[DispatchJob]:
         with Session(self._engine) as session:
             statement = select(DispatchJobRecord).where(
                 DispatchJobRecord.workspace_id == workspace_id
@@ -223,7 +231,11 @@ class DispatchQueue:
 
     @staticmethod
     def _to_job(record: DispatchJobRecord) -> DispatchJob:
-        result = DispatchResult.model_validate_json(record.result_json) if record.result_json else None
+        result = (
+            DispatchResult.model_validate_json(record.result_json)
+            if record.result_json
+            else None
+        )
         return DispatchJob(
             id=record.id,
             workspace_id=record.workspace_id,
