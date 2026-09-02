@@ -7,7 +7,8 @@ from meeting_intelligence.security import apply_security_headers
 
 
 def test_api_responses_include_browser_security_headers() -> None:
-    response = TestClient(app).get("/healthz")
+    client = TestClient(app, client=("security-headers-test", 50000))
+    response = client.get("/healthz")
 
     assert response.status_code == 200
     assert response.headers["x-content-type-options"] == "nosniff"
