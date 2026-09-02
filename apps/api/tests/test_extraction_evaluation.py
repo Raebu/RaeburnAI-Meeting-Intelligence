@@ -8,7 +8,7 @@ from meeting_intelligence.schemas import Attendee, MeetingAnalyseRequest, Meetin
 
 
 @pytest.mark.parametrize(
-    ("request", "expectation"),
+    ("meeting_request", "expectation"),
     [
         (
             MeetingAnalyseRequest(
@@ -84,9 +84,11 @@ from meeting_intelligence.schemas import Attendee, MeetingAnalyseRequest, Meetin
     ],
 )
 def test_extraction_quality_gate(
-    request: MeetingAnalyseRequest, expectation: ExtractionExpectation
+    meeting_request: MeetingAnalyseRequest, expectation: ExtractionExpectation
 ) -> None:
-    quality = evaluate_extraction(MeetingIntelligenceEngine().analyse(request), expectation)
+    quality = evaluate_extraction(
+        MeetingIntelligenceEngine().analyse(meeting_request), expectation
+    )
 
     assert quality.score >= 0.95
     assert quality.precision_proxy >= 0.95
