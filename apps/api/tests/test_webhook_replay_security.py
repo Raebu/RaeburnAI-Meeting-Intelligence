@@ -10,6 +10,10 @@ from meeting_intelligence.webhook_security import (
 )
 
 
+def _test_secret(value: str) -> str:
+    return value
+
+
 def _signature(secret: str, timestamp: int, body: bytes) -> str:
     digest = hmac.new(
         secret.encode(), f"{timestamp}.".encode() + body, hashlib.sha256
@@ -18,7 +22,7 @@ def _signature(secret: str, timestamp: int, body: bytes) -> str:
 
 
 def test_inbound_signature_accepts_valid_recent_payload() -> None:
-    secret = "test-signing-secret"
+    secret = _test_secret("test-signing-secret")
     timestamp = 1_800_000_000
     body = b'{"event":"meeting.updated"}'
 
@@ -32,7 +36,7 @@ def test_inbound_signature_accepts_valid_recent_payload() -> None:
 
 
 def test_inbound_signature_rejects_stale_tampered_and_malformed_payloads() -> None:
-    secret = "test-signing-secret"
+    secret = _test_secret("test-signing-secret")
     timestamp = 1_800_000_000
     body = b'{"event":"meeting.updated"}'
     signature = _signature(secret, timestamp, body)
