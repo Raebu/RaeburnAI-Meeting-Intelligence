@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import json
 from functools import lru_cache
 
 from pydantic import Field, model_validator
@@ -11,6 +14,12 @@ class Settings(BaseSettings):
 
     environment: str = Field(default="development", alias="RAEBURN_ENV")
     api_key: str = Field(alias="RAEBURN_API_KEY")
+    bootstrap_workspace_id: str = Field(
+        default="default", alias="RAEBURN_BOOTSTRAP_WORKSPACE_ID"
+    )
+    workspace_api_keys_json: str = Field(
+        default="{}", alias="RAEBURN_WORKSPACE_API_KEYS"
+    )
     public_base_url: str = Field(
         default="http://localhost:3000", alias="RAEBURN_PUBLIC_BASE_URL"
     )
@@ -31,6 +40,18 @@ class Settings(BaseSettings):
         alias="DATABASE_URL",
     )
     redis_url: str = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
+    dispatch_max_attempts: int = Field(
+        default=5, ge=1, le=20, alias="DISPATCH_MAX_ATTEMPTS"
+    )
+    dispatch_base_backoff_seconds: int = Field(
+        default=5, ge=1, le=3600, alias="DISPATCH_BASE_BACKOFF_SECONDS"
+    )
+    dispatch_lease_seconds: int = Field(
+        default=120, ge=10, le=3600, alias="DISPATCH_LEASE_SECONDS"
+    )
+    dispatch_poll_seconds: float = Field(
+        default=1.0, ge=0.1, le=60, alias="DISPATCH_POLL_SECONDS"
+    )
     approvals_required: bool = Field(default=True, alias="APPROVALS_REQUIRED")
     llm_provider: str = Field(default="deterministic", alias="LLM_PROVIDER")
     openai_compatible_base_url: str = Field(
@@ -71,7 +92,36 @@ class Settings(BaseSettings):
     )
 
     @model_validator(mode="after")
-    def validate_production_guardrails(self) -> "Settings":
+    def validate_settings(self) -> Settings:
+        if not self.bootstrap_workspace_id.strip():
+            raise ValueError("RAEBURN_BOOTSTRAP_WORKSPACE_ID cannot be empty")
+        try:
+            workspace_keys = json.loads(self.workspace_api_keys_json)
+        except json.JSONDecodeError as exc:
+            raise ValueError("RAEBURN_WORKSPACE_API_KEYS must be valid JSON") from exc
+        if not isinstance(workspace_keys, dict):
+            raise ValueError("RAEBURN_WORKSPACE_API_KEYS must be a JSON object")
+        for key, value in workspace_keys.items():
+            if not isinstance(key, str) or not isinstance(value, dict):
+                raise ValueError(
+                    "workspace API-key entries must map strings to objects"
+                )
+            if self.environment == "production" and len(key) < 32:
+                raise ValueError(
+                    "production workspace API keys must be at least 32 characters"
+                )
+            required = (
+                value.get("workspace_id"),
+                value.get("role"),
+                value.get("subject"),
+            )
+            if not all(isinstance(item, str) and item for item in required):
+                raise ValueError(
+                    "workspace API-key entries require workspace_id, role and subject"
+                )
+            if value.get("role") not in {"viewer", "operator", "approver", "admin"}:
+                raise ValueError("unsupported workspace role")
+
         if self.environment != "production":
             return self
 
