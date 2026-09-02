@@ -20,8 +20,12 @@ class MeetingResultRecord(Base):
 
     meeting_id: Mapped[str] = mapped_column(String(255), primary_key=True)
     payload: Mapped[str] = mapped_column(Text, nullable=False)
-    stored_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    stored_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
 
 def _build_engine(database_url: str) -> Engine:
