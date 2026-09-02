@@ -22,6 +22,8 @@ jobs:
       - name: Apply canonical formatting
         working-directory: apps/api
         run: ruff format meeting_intelligence/config.py tests/test_production_config.py
+      - name: Show canonical diff
+        run: git diff -- apps/api/meeting_intelligence/config.py apps/api/tests/test_production_config.py
       - name: Upload canonical files
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
