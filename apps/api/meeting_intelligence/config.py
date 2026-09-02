@@ -221,7 +221,11 @@ class Settings(BaseSettings):
                         ("host", "username", "password", "from_address"),
                     )
                     port = config.get("port")
-                    if not isinstance(port, int) or isinstance(port, bool) or not 1 <= port <= 65535:
+                    if (
+                        not isinstance(port, int)
+                        or isinstance(port, bool)
+                        or not 1 <= port <= 65535
+                    ):
                         raise ValueError(
                             "production email workspace config requires a valid port"
                         )
