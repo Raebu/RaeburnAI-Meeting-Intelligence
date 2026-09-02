@@ -1,7 +1,5 @@
 from datetime import datetime
 
-import pytest
-
 from meeting_intelligence.evaluation import ExtractionExpectation, evaluate_extraction
 from meeting_intelligence.intelligence import MeetingIntelligenceEngine
 from meeting_intelligence.schemas import (
@@ -11,9 +9,8 @@ from meeting_intelligence.schemas import (
 )
 
 
-@pytest.mark.parametrize(
-    ("meeting_request", "expectation"),
-    [
+def _benchmark_cases() -> list[tuple[MeetingAnalyseRequest, ExtractionExpectation]]:
+    return [
         (
             MeetingAnalyseRequest(
                 title="Implementation planning",
@@ -85,18 +82,18 @@ from meeting_intelligence.schemas import (
                 systems=("crm",),
             ),
         ),
-    ],
-)
-def test_extraction_quality_gate(
-    meeting_request: MeetingAnalyseRequest, expectation: ExtractionExpectation
-) -> None:
-    quality = evaluate_extraction(
-        MeetingIntelligenceEngine().analyse(meeting_request), expectation
-    )
+    ]
 
-    assert quality.score >= 0.95
-    assert quality.precision_proxy >= 0.95
-    assert quality.decision_recall >= 0.90
-    assert quality.action_recall >= 0.90
-    assert quality.owner_recall >= 0.90
-    assert quality.system_recall >= 0.90
+
+def test_extraction_quality_gate() -> None:
+    engine = MeetingIntelligenceEngine()
+
+    for meeting_request, expectation in _benchmark_cases():
+        quality = evaluate_extraction(engine.analyse(meeting_request), expectation)
+
+        assert quality.score >= 0.95
+        assert quality.precision_proxy >= 0.95
+        assert quality.decision_recall >= 0.90
+        assert quality.action_recall >= 0.90
+        assert quality.owner_recall >= 0.90
+        assert quality.system_recall >= 0.90
