@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from typing import Any
 
 import httpx
@@ -58,6 +59,30 @@ async def _post_with_retry(
     raise RuntimeError("integration dispatch retry loop exhausted unexpectedly")
 
 
+async def _patch_with_retry(
+    client: httpx.AsyncClient,
+    url: str,
+    **kwargs: Any,
+) -> httpx.Response:
+    """Retry transient PATCH failures with the same bounded policy as POST."""
+    for attempt in range(_MAX_DISPATCH_ATTEMPTS):
+        try:
+            response = await client.patch(url, **kwargs)
+        except (httpx.TimeoutException, httpx.NetworkError):
+            if attempt == _MAX_DISPATCH_ATTEMPTS - 1:
+                raise
+        else:
+            if (
+                response.status_code not in _RETRYABLE_STATUS_CODES
+                or attempt == _MAX_DISPATCH_ATTEMPTS - 1
+            ):
+                return response
+
+        await asyncio.sleep(0.25 * (2**attempt))
+
+    raise RuntimeError("integration dispatch retry loop exhausted unexpectedly")
+
+
 def _signed_webhook_headers(
     command: IntegrationCommand, signing_secret: str, timestamp: int
 ) -> dict[str, str]:
@@ -72,11 +97,19 @@ def _signed_webhook_headers(
     }
 
 
+def _config_string(config: Mapping[str, Any], key: str) -> str | None:
+    value = config.get(key)
+    return value if isinstance(value, str) and value else None
+
+
 class GitHubIssueAdapter(IntegrationAdapter):
     system = "github"
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self, settings: Settings, workspace_config: Mapping[str, Any] | None = None
+    ) -> None:
         self.settings = settings
+        self.workspace_config = workspace_config or {}
 
     async def dispatch(self, command: IntegrationCommand) -> DispatchResult:
         if not self.settings.github_writeback_enabled:
@@ -86,15 +119,19 @@ class GitHubIssueAdapter(IntegrationAdapter):
                 status="skipped",
                 detail="disabled",
             )
-        repository = (
-            command.payload.get("repository") or self.settings.github_default_repository
+        token = _config_string(self.workspace_config, "token")
+        repository = command.payload.get("repository") or _config_string(
+            self.workspace_config, "default_repository"
         )
-        if not repository or not self.settings.github_token:
+        if self.settings.environment != "production":
+            token = token or self.settings.github_token
+            repository = repository or self.settings.github_default_repository
+        if not repository or not token:
             return DispatchResult(
                 system=self.system,
                 operation=command.operation,
                 status="failed",
-                detail="missing config",
+                detail="missing workspace config",
             )
         action = command.payload["action"]
         url = f"https://api.github.com/repos/{repository}/issues"
@@ -103,7 +140,7 @@ class GitHubIssueAdapter(IntegrationAdapter):
                 client,
                 url,
                 headers={
-                    "Authorization": f"Bearer {self.settings.github_token}",
+                    "Authorization": f"Bearer {token}",
                     "Accept": "application/vnd.github+json",
                 },
                 json={"title": action["title"], "body": action["description"]},
@@ -122,8 +159,11 @@ class GitHubIssueAdapter(IntegrationAdapter):
 class JiraAdapter(IntegrationAdapter):
     system = "jira"
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self, settings: Settings, workspace_config: Mapping[str, Any] | None = None
+    ) -> None:
         self.settings = settings
+        self.workspace_config = workspace_config or {}
 
     async def dispatch(self, command: IntegrationCommand) -> DispatchResult:
         if not self.settings.jira_writeback_enabled:
@@ -133,10 +173,15 @@ class JiraAdapter(IntegrationAdapter):
                 status="skipped",
                 detail="disabled",
             )
-        jira_base_url = self.settings.jira_base_url
-        jira_email = self.settings.jira_email
-        jira_api_token = self.settings.jira_api_token
-        jira_project_key = self.settings.jira_project_key
+        jira_base_url = _config_string(self.workspace_config, "base_url")
+        jira_email = _config_string(self.workspace_config, "email")
+        jira_api_token = _config_string(self.workspace_config, "api_token")
+        jira_project_key = _config_string(self.workspace_config, "project_key")
+        if self.settings.environment != "production":
+            jira_base_url = jira_base_url or self.settings.jira_base_url
+            jira_email = jira_email or self.settings.jira_email
+            jira_api_token = jira_api_token or self.settings.jira_api_token
+            jira_project_key = jira_project_key or self.settings.jira_project_key
         if (
             not jira_base_url
             or not jira_email
@@ -147,7 +192,7 @@ class JiraAdapter(IntegrationAdapter):
                 system=self.system,
                 operation=command.operation,
                 status="failed",
-                detail="missing config",
+                detail="missing workspace config",
             )
         action = command.payload["action"]
         async with httpx.AsyncClient(timeout=20) as client:
@@ -188,11 +233,98 @@ class JiraAdapter(IntegrationAdapter):
         )
 
 
+class HubSpotAdapter(IntegrationAdapter):
+    """Update a HubSpot deal after human approval using workspace credentials."""
+
+    system = "crm"
+
+    def __init__(
+        self, settings: Settings, workspace_config: Mapping[str, Any] | None = None
+    ) -> None:
+        self.settings = settings
+        self.workspace_config = workspace_config or {}
+
+    async def dispatch(self, command: IntegrationCommand) -> DispatchResult:
+        if not self.settings.crm_writeback_enabled:
+            return DispatchResult(
+                system=self.system,
+                operation=command.operation,
+                status="skipped",
+                detail="disabled",
+            )
+        token = _config_string(self.workspace_config, "api_key")
+        if self.settings.environment != "production":
+            token = token or self.settings.crm_api_key
+        if not token:
+            return DispatchResult(
+                system=self.system,
+                operation=command.operation,
+                status="failed",
+                detail="missing workspace config",
+            )
+        if self.settings.crm_provider != "hubspot":
+            return DispatchResult(
+                system=self.system,
+                operation=command.operation,
+                status="failed",
+                detail="unsupported CRM provider",
+            )
+
+        deal_id = command.payload.get("deal_id")
+        if not isinstance(deal_id, str) or not deal_id:
+            return DispatchResult(
+                system=self.system,
+                operation=command.operation,
+                status="failed",
+                detail="HubSpot deal_id is required for writeback",
+            )
+
+        summary = command.payload.get("summary")
+        next_step = command.payload.get("next_step")
+        properties: dict[str, str] = {}
+        if isinstance(summary, str) and summary:
+            properties["description"] = summary
+        if isinstance(next_step, str) and next_step:
+            properties["hs_next_step"] = next_step
+        if not properties:
+            return DispatchResult(
+                system=self.system,
+                operation=command.operation,
+                status="failed",
+                detail="no supported HubSpot properties supplied",
+            )
+
+        url = f"https://api.hubapi.com/crm/v3/objects/deals/{deal_id}"
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await _patch_with_retry(
+                client,
+                url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                },
+                json={"properties": properties},
+            )
+        response.raise_for_status()
+        payload: dict[str, Any] = response.json()
+        external_id = payload.get("id")
+        return DispatchResult(
+            system=self.system,
+            operation=command.operation,
+            external_id=str(external_id) if external_id is not None else deal_id,
+            url=f"https://app.hubspot.com/contacts/deal/{deal_id}",
+            status="dispatched",
+        )
+
+
 class WebhookAdapter(IntegrationAdapter):
     system = "webhook"
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self, settings: Settings, workspace_config: Mapping[str, Any] | None = None
+    ) -> None:
         self.settings = settings
+        self.workspace_config = workspace_config or {}
 
     async def dispatch(self, command: IntegrationCommand) -> DispatchResult:
         if not self.settings.webhook_writeback_enabled:
@@ -202,24 +334,29 @@ class WebhookAdapter(IntegrationAdapter):
                 status="skipped",
                 detail="disabled",
             )
-        if not self.settings.webhook_url or not self.settings.webhook_signing_secret:
+        webhook_url = _config_string(self.workspace_config, "url")
+        signing_secret = _config_string(self.workspace_config, "signing_secret")
+        if self.settings.environment != "production":
+            webhook_url = webhook_url or self.settings.webhook_url
+            signing_secret = signing_secret or self.settings.webhook_signing_secret
+        if not webhook_url or not signing_secret:
             return DispatchResult(
                 system=self.system,
                 operation=command.operation,
                 status="failed",
-                detail="missing config",
+                detail="missing workspace config",
             )
 
         body = command.model_dump_json()
         headers = _signed_webhook_headers(
             command,
-            self.settings.webhook_signing_secret,
+            signing_secret,
             int(time.time()),
         )
         async with httpx.AsyncClient(timeout=20) as client:
             response = await _post_with_retry(
                 client,
-                self.settings.webhook_url,
+                webhook_url,
                 content=body,
                 headers=headers,
             )
