@@ -40,6 +40,18 @@ class Settings(BaseSettings):
         alias="DATABASE_URL",
     )
     redis_url: str = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
+    dispatch_max_attempts: int = Field(
+        default=5, ge=1, le=20, alias="DISPATCH_MAX_ATTEMPTS"
+    )
+    dispatch_base_backoff_seconds: int = Field(
+        default=5, ge=1, le=3600, alias="DISPATCH_BASE_BACKOFF_SECONDS"
+    )
+    dispatch_lease_seconds: int = Field(
+        default=120, ge=10, le=3600, alias="DISPATCH_LEASE_SECONDS"
+    )
+    dispatch_poll_seconds: float = Field(
+        default=1.0, ge=0.1, le=60, alias="DISPATCH_POLL_SECONDS"
+    )
     approvals_required: bool = Field(default=True, alias="APPROVALS_REQUIRED")
     llm_provider: str = Field(default="deterministic", alias="LLM_PROVIDER")
     openai_compatible_base_url: str = Field(
