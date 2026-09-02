@@ -23,6 +23,7 @@ from meeting_intelligence.schemas import (
     MeetingIntelligenceResult,
 )
 from meeting_intelligence.security import apply_security_headers
+from meeting_intelligence.storage import MeetingResultStore
 
 logger = structlog.get_logger(__name__)
 settings = get_settings()
@@ -43,8 +44,8 @@ app.add_middleware(
 )
 
 _engine = MeetingIntelligenceEngine()
-_results: dict[str, MeetingIntelligenceResult] = {}
-_result_stored_at: dict[str, float] = {}
+_store = MeetingResultStore(settings)
+_store.bootstrap_nonproduction_schema()
 _rate_window: dict[str, deque[float]] = {}
 _rate_limit_lock = Lock()
 _meeting_locks: defaultdict[str, Lock] = defaultdict(Lock)
@@ -92,19 +93,8 @@ def _approval_targets(
 
 
 def _stored_result(meeting_id: str) -> MeetingIntelligenceResult | None:
-    """Return a non-expired stored result, purging data past its retention window."""
-    result = _results.get(meeting_id)
-    if result is None:
-        return None
-
-    stored_at = _result_stored_at.get(meeting_id)
-    retention_seconds = get_settings().meeting_retention_seconds
-    if stored_at is None or time.time() - stored_at >= retention_seconds:
-        _results.pop(meeting_id, None)
-        _result_stored_at.pop(meeting_id, None)
-        logger.info("meeting_retention_expired", meeting_ref=_safe_ref(meeting_id))
-        return None
-    return result
+    """Return a non-expired durable meeting result."""
+    return _store.get(meeting_id)
 
 
 def _consume_rate_limit(client: str, now: float) -> bool:
@@ -195,6 +185,11 @@ def healthz() -> HealthResponse:
 
 @app.get("/readyz", response_model=HealthResponse)
 def readyz() -> HealthResponse:
+    if not _store.ready():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Persistence layer is not ready",
+        )
     return HealthResponse(
         status="ready", service="meeting-intelligence-api", version="0.1.0"
     )
@@ -213,8 +208,7 @@ def analyse_meeting(request: MeetingAnalyseRequest) -> MeetingIntelligenceResult
         for command in result.integration_commands:
             command.approval_status = ApprovalStatus.approved
     with _meeting_locks[request.meeting_id]:
-        _results[request.meeting_id] = result.model_copy(deep=True)
-        _result_stored_at[request.meeting_id] = time.time()
+        _store.put(request.meeting_id, result, reset_retention=True)
     logger.info(
         "meeting_analyzed",
         meeting_ref=_safe_ref(request.meeting_id),
@@ -281,8 +275,7 @@ def delete_meeting_result(meeting_id: str) -> Response:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Meeting result not found",
             )
-        del _results[meeting_id]
-        _result_stored_at.pop(meeting_id, None)
+        _store.delete(meeting_id)
     logger.info("meeting_deleted", meeting_ref=_safe_ref(meeting_id))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -306,6 +299,7 @@ def approve_commands(
         for command in targets:
             command.approval_status = ApprovalStatus.approved
         result.audit_events.append(f"commands.approved_by:{approval.approved_by}")
+        _store.put(meeting_id, result, reset_retention=False)
         response_result = result.model_copy(deep=True)
     logger.info(
         "commands_approved",
@@ -334,6 +328,7 @@ def reject_commands(
         for command in targets:
             command.approval_status = ApprovalStatus.rejected
         result.audit_events.append(f"commands.rejected_by:{approval.approved_by}")
+        _store.put(meeting_id, result, reset_retention=False)
         response_result = result.model_copy(deep=True)
     logger.info(
         "commands_rejected",

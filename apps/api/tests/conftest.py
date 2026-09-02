@@ -1,6 +1,9 @@
 import os
 
 # The production application intentionally requires RAEBURN_API_KEY. Tests provide
-# an explicit non-production value so importing the app never depends on a
-# developer machine's environment or an unsafe runtime default.
+# explicit non-production values before importing the app so collection never
+# depends on developer services, production credentials, or a local PostgreSQL
+# instance.
+os.environ.setdefault("RAEBURN_ENV", "test")
 os.environ.setdefault("RAEBURN_API_KEY", "test-only-api-key")
+os.environ.setdefault("DATABASE_URL", "sqlite+pysqlite:///:memory:")
