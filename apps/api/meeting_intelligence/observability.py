@@ -4,9 +4,9 @@ import hashlib
 import json
 import time
 from collections import Counter
+from collections.abc import Iterator
 from contextlib import contextmanager
 from threading import Lock
-from typing import Iterator
 
 import structlog
 
@@ -24,7 +24,13 @@ def safe_ref(value: str) -> str:
 
 def _labels(labels: dict[str, str]) -> tuple[tuple[str, str], ...]:
     """Allow only bounded operational labels; never transcript/user content."""
-    return tuple(sorted((key, str(value)) for key, value in labels.items() if key in _ALLOWED_LABELS))
+    return tuple(
+        sorted(
+            (key, str(value))
+            for key, value in labels.items()
+            if key in _ALLOWED_LABELS
+        )
+    )
 
 
 def increment(name: str, **labels: str) -> None:
@@ -44,7 +50,9 @@ def trace_span(name: str, **fields: str) -> Iterator[None]:
     """Emit a transcript-safe structured span without external telemetry dependency."""
     started = time.perf_counter()
     trace_id = hashlib.sha256(f"{time.time_ns()}:{name}".encode()).hexdigest()[:16]
-    safe_fields = {key: value for key, value in fields.items() if key in _ALLOWED_LABELS}
+    safe_fields = {
+        key: value for key, value in fields.items() if key in _ALLOWED_LABELS
+    }
     logger.info("trace_started", span=name, trace_id=trace_id, **safe_fields)
     try:
         yield
