@@ -13,7 +13,7 @@ from meeting_intelligence.schemas import ApprovalStatus, IntegrationCommand
 
 
 class FakeSMTP:
-    instances: list["FakeSMTP"] = []
+    instances: list[FakeSMTP] = []
 
     def __init__(self, host: str, port: int, timeout: int) -> None:
         self.host = host
@@ -24,7 +24,7 @@ class FakeSMTP:
         self.message: EmailMessage | None = None
         self.__class__.instances.append(self)
 
-    def __enter__(self) -> "FakeSMTP":
+    def __enter__(self) -> FakeSMTP:
         return self
 
     def __exit__(self, *_args: object) -> None:
@@ -121,7 +121,9 @@ async def test_email_adapter_rejects_header_injection_before_network(
         },
     )
 
-    result = await adapter.dispatch(_command(recipients=["victim@example.com\nBcc:x@example.com"]))
+    result = await adapter.dispatch(
+        _command(recipients=["victim@example.com\nBcc:x@example.com"])
+    )
 
     assert result.status == "failed"
     assert result.detail == "valid recipients are required"
