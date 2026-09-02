@@ -220,11 +220,7 @@ def healthz() -> HealthResponse:
 
 @app.get("/readyz", response_model=HealthResponse)
 def readyz() -> HealthResponse:
-    if (
-        not _store.ready()
-        or not _dispatch_queue.ready()
-        or not _native_work.ready()
-    ):
+    if not _store.ready() or not _dispatch_queue.ready() or not _native_work.ready():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Persistence, native work or dispatch layer is not ready",
