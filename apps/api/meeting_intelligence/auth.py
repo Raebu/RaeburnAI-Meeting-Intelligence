@@ -11,7 +11,7 @@ from enum import StrEnum
 from typing import Any
 
 from fastapi import Depends, Header, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from meeting_intelligence.config import Settings, get_settings
 
@@ -35,20 +35,12 @@ _TOTP_WINDOW = 1
 
 
 class Principal(BaseModel):
-    """Internal authenticated principal. Never serialize this model to clients."""
+    """Authenticated workspace principal with non-serializable MFA material."""
 
     workspace_id: str
     role: WorkspaceRole
     subject: str
-    totp_secret: str | None = None
-
-
-class PrincipalResponse(BaseModel):
-    """Public principal representation with authentication secrets excluded."""
-
-    workspace_id: str
-    role: WorkspaceRole
-    subject: str
+    totp_secret: str | None = Field(default=None, exclude=True, repr=False)
 
 
 
