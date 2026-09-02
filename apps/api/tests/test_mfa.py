@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from meeting_intelligence.auth import _totp_at, _verify_totp, authenticate_principal
 from meeting_intelligence.config import Settings
 
-_RFC_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+_RFC_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"  # noqa: S105 - RFC 6238 test vector
 
 
 def test_totp_matches_rfc6238_sha1_vector_at_59_seconds() -> None:
