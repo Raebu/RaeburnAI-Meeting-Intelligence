@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import time
@@ -11,6 +12,9 @@ from pydantic import BaseModel
 
 from meeting_intelligence.config import Settings
 from meeting_intelligence.schemas import IntegrationCommand
+
+_RETRYABLE_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504}
+_MAX_DISPATCH_ATTEMPTS = 3
 
 
 class DispatchResult(BaseModel):
@@ -28,6 +32,30 @@ class IntegrationAdapter(ABC):
     @abstractmethod
     async def dispatch(self, command: IntegrationCommand) -> DispatchResult:
         raise NotImplementedError
+
+
+async def _post_with_retry(
+    client: httpx.AsyncClient,
+    url: str,
+    **kwargs: Any,
+) -> httpx.Response:
+    """Retry transient outbound failures without retrying permanent client errors."""
+    for attempt in range(_MAX_DISPATCH_ATTEMPTS):
+        try:
+            response = await client.post(url, **kwargs)
+        except (httpx.TimeoutException, httpx.NetworkError):
+            if attempt == _MAX_DISPATCH_ATTEMPTS - 1:
+                raise
+        else:
+            if (
+                response.status_code not in _RETRYABLE_STATUS_CODES
+                or attempt == _MAX_DISPATCH_ATTEMPTS - 1
+            ):
+                return response
+
+        await asyncio.sleep(0.25 * (2**attempt))
+
+    raise RuntimeError("integration dispatch retry loop exhausted unexpectedly")
 
 
 def _signed_webhook_headers(
@@ -71,7 +99,8 @@ class GitHubIssueAdapter(IntegrationAdapter):
         action = command.payload["action"]
         url = f"https://api.github.com/repos/{repository}/issues"
         async with httpx.AsyncClient(timeout=20) as client:
-            response = await client.post(
+            response = await _post_with_retry(
+                client,
                 url,
                 headers={
                     "Authorization": f"Bearer {self.settings.github_token}",
@@ -122,7 +151,8 @@ class JiraAdapter(IntegrationAdapter):
             )
         action = command.payload["action"]
         async with httpx.AsyncClient(timeout=20) as client:
-            response = await client.post(
+            response = await _post_with_retry(
+                client,
                 f"{jira_base_url}/rest/api/3/issue",
                 auth=(jira_email, jira_api_token),
                 json={
@@ -187,7 +217,8 @@ class WebhookAdapter(IntegrationAdapter):
             int(time.time()),
         )
         async with httpx.AsyncClient(timeout=20) as client:
-            response = await client.post(
+            response = await _post_with_retry(
+                client,
                 self.settings.webhook_url,
                 content=body,
                 headers=headers,
