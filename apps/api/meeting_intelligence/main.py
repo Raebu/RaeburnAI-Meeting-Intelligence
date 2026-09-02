@@ -6,6 +6,7 @@ from collections import deque
 from collections.abc import Awaitable, Callable
 from threading import Lock
 from urllib.parse import quote
+from uuid import uuid4
 
 import structlog
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
@@ -62,6 +63,12 @@ def _safe_route_path(request: Request) -> str:
     route = request.scope.get("route")
     route_path = getattr(route, "path", None)
     return route_path if isinstance(route_path, str) else "unresolved"
+
+
+def _request_id(request: Request) -> str:
+    """Return the server-generated correlation ID for an instrumented request."""
+    value = getattr(request.state, "request_id", None)
+    return value if isinstance(value, str) else "unavailable"
 
 
 def _meeting_lock(meeting_id: str) -> Lock:
@@ -143,25 +150,35 @@ async def rate_limit_and_audit(
     request: Request, call_next: Callable[[Request], Awaitable[Response]]
 ) -> Response:
     app_settings = get_settings()
+    request.state.request_id = uuid4().hex
+    started_at = time.perf_counter()
     client = request.client.host if request.client else "unknown"
     if not _consume_rate_limit(client, time.monotonic()):
         logger.warning(
             "rate_limit_exceeded",
             client_ref=_safe_ref(client),
             route=_safe_route_path(request),
+            request_id=_request_id(request),
         )
-        return apply_security_headers(
+        response = apply_security_headers(
             JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"}),
             app_settings,
         )
+        response.headers["X-Request-ID"] = _request_id(request)
+        return response
     response = await call_next(request)
+    duration_ms = round((time.perf_counter() - started_at) * 1000, 3)
     logger.info(
         "request_completed",
         method=request.method,
         route=_safe_route_path(request),
         status_code=response.status_code,
+        request_id=_request_id(request),
+        duration_ms=duration_ms,
     )
-    return apply_security_headers(response, app_settings)
+    response = apply_security_headers(response, app_settings)
+    response.headers["X-Request-ID"] = _request_id(request)
+    return response
 
 
 @app.exception_handler(Exception)
@@ -170,6 +187,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
         "unhandled_exception",
         route=_safe_route_path(request),
         error_type=type(exc).__name__,
+        request_id=_request_id(request),
     )
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
