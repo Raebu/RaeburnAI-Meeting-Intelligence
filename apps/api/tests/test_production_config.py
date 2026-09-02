@@ -133,6 +133,5 @@ def test_production_accepts_workspace_scoped_writeback_configuration() -> None:
     assert settings.crm_writeback_enabled is True
     assert settings.email_followup_enabled is False
     assert (
-        settings.integration_config("customer-a", "crm")["api_key"]
-        == TEST_CREDENTIAL
+        settings.integration_config("customer-a", "crm")["api_key"] == TEST_CREDENTIAL
     )
