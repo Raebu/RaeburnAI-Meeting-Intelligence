@@ -39,9 +39,7 @@ def test_signature_changes_with_timestamp() -> None:
     first = _signed_webhook_headers(command, "test-secret", 1_725_000_000)
     second = _signed_webhook_headers(command, "test-secret", 1_725_000_001)
 
-    assert first["X-Raeburn-Webhook-Signature"] != second[
-        "X-Raeburn-Webhook-Signature"
-    ]
+    assert first["X-Raeburn-Webhook-Signature"] != second["X-Raeburn-Webhook-Signature"]
 
 
 async def test_enabled_webhook_fails_closed_without_signing_secret() -> None:
