@@ -6,7 +6,8 @@ from fastapi import HTTPException
 from meeting_intelligence.auth import _totp_at, _verify_totp, authenticate_principal
 from meeting_intelligence.config import Settings
 
-_RFC_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"  # noqa: S105 - RFC 6238 test vector
+# Public RFC 6238 test vector, not a deployable credential.
+_RFC_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"  # noqa: S105
 
 
 def test_totp_matches_rfc6238_sha1_vector_at_59_seconds() -> None:
@@ -22,7 +23,9 @@ def test_totp_accepts_adjacent_clock_step_and_rejects_bad_codes() -> None:
     assert not _verify_totp(_RFC_SECRET, "12345", now=60)
 
 
-def test_workspace_principal_with_totp_requires_second_factor(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_workspace_principal_with_totp_requires_second_factor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr("meeting_intelligence.auth.time.time", lambda: 60)
     settings = Settings(
         RAEBURN_ENV="test",
