@@ -25,17 +25,27 @@ class MeetingResultRecord(Base):
 
 
 def _build_engine(database_url: str) -> Engine:
-    kwargs: dict[str, object] = {
-        "pool_pre_ping": True,
-        "future": True,
-    }
     if database_url.startswith("sqlite"):
-        kwargs["connect_args"] = {"check_same_thread": False}
         if ":memory:" in database_url:
-            kwargs["poolclass"] = StaticPool
-    else:
-        kwargs["pool_recycle"] = 300
-    return create_engine(database_url, **kwargs)
+            return create_engine(
+                database_url,
+                pool_pre_ping=True,
+                future=True,
+                connect_args={"check_same_thread": False},
+                poolclass=StaticPool,
+            )
+        return create_engine(
+            database_url,
+            pool_pre_ping=True,
+            future=True,
+            connect_args={"check_same_thread": False},
+        )
+    return create_engine(
+        database_url,
+        pool_pre_ping=True,
+        pool_recycle=300,
+        future=True,
+    )
 
 
 class MeetingResultStore:
