@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
+import time
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -25,6 +28,20 @@ class IntegrationAdapter(ABC):
     @abstractmethod
     async def dispatch(self, command: IntegrationCommand) -> DispatchResult:
         raise NotImplementedError
+
+
+def _signed_webhook_headers(
+    command: IntegrationCommand, signing_secret: str, timestamp: int
+) -> dict[str, str]:
+    body = command.model_dump_json()
+    message = f"{timestamp}.{body}".encode()
+    signature = hmac.new(signing_secret.encode(), message, hashlib.sha256).hexdigest()
+    return {
+        "Content-Type": "application/json",
+        "Idempotency-Key": str(command.id),
+        "X-Raeburn-Webhook-Timestamp": str(timestamp),
+        "X-Raeburn-Webhook-Signature": f"sha256={signature}",
+    }
 
 
 class GitHubIssueAdapter(IntegrationAdapter):
@@ -148,17 +165,32 @@ class WebhookAdapter(IntegrationAdapter):
         self.settings = settings
 
     async def dispatch(self, command: IntegrationCommand) -> DispatchResult:
-        if not self.settings.webhook_writeback_enabled or not self.settings.webhook_url:
+        if not self.settings.webhook_writeback_enabled:
             return DispatchResult(
                 system=self.system,
                 operation=command.operation,
                 status="skipped",
                 detail="disabled",
             )
+        if not self.settings.webhook_url or not self.settings.webhook_signing_secret:
+            return DispatchResult(
+                system=self.system,
+                operation=command.operation,
+                status="failed",
+                detail="missing config",
+            )
+
+        body = command.model_dump_json()
+        headers = _signed_webhook_headers(
+            command,
+            self.settings.webhook_signing_secret,
+            int(time.time()),
+        )
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.post(
                 self.settings.webhook_url,
-                json=command.model_dump(mode="json"),
+                content=body,
+                headers=headers,
             )
         response.raise_for_status()
         return DispatchResult(
