@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import time
-from collections import defaultdict, deque
+from collections import deque
 from collections.abc import Awaitable, Callable
 from threading import Lock
 from urllib.parse import quote
@@ -48,7 +48,8 @@ _store = MeetingResultStore(settings)
 _store.bootstrap_nonproduction_schema()
 _rate_window: dict[str, deque[float]] = {}
 _rate_limit_lock = Lock()
-_meeting_locks: defaultdict[str, Lock] = defaultdict(Lock)
+_MEETING_LOCK_STRIPE_COUNT = 256
+_meeting_lock_stripes = tuple(Lock() for _ in range(_MEETING_LOCK_STRIPE_COUNT))
 
 
 def _safe_ref(value: str) -> str:
@@ -61,6 +62,13 @@ def _safe_route_path(request: Request) -> str:
     route = request.scope.get("route")
     route_path = getattr(route, "path", None)
     return route_path if isinstance(route_path, str) else "unresolved"
+
+
+def _meeting_lock(meeting_id: str) -> Lock:
+    """Map arbitrary meeting IDs onto a fixed lock pool without retaining the IDs."""
+    digest = hashlib.sha256(meeting_id.encode("utf-8")).digest()
+    stripe = int.from_bytes(digest[:8], byteorder="big") % _MEETING_LOCK_STRIPE_COUNT
+    return _meeting_lock_stripes[stripe]
 
 
 def _approval_targets(
@@ -207,7 +215,7 @@ def analyse_meeting(request: MeetingAnalyseRequest) -> MeetingIntelligenceResult
     if not require_approval:
         for command in result.integration_commands:
             command.approval_status = ApprovalStatus.approved
-    with _meeting_locks[request.meeting_id]:
+    with _meeting_lock(request.meeting_id):
         _store.put(request.meeting_id, result, reset_retention=True)
     logger.info(
         "meeting_analyzed",
@@ -224,7 +232,7 @@ def analyse_meeting(request: MeetingAnalyseRequest) -> MeetingIntelligenceResult
     dependencies=[Depends(require_api_key)],
 )
 def get_meeting_result(meeting_id: str) -> MeetingIntelligenceResult:
-    with _meeting_locks[meeting_id]:
+    with _meeting_lock(meeting_id):
         result = _stored_result(meeting_id)
         if not result:
             raise HTTPException(
@@ -240,7 +248,7 @@ def get_meeting_result(meeting_id: str) -> MeetingIntelligenceResult:
     dependencies=[Depends(require_api_key)],
 )
 def export_meeting_result(meeting_id: str) -> JSONResponse:
-    with _meeting_locks[meeting_id]:
+    with _meeting_lock(meeting_id):
         result = _stored_result(meeting_id)
         if not result:
             raise HTTPException(
@@ -269,7 +277,7 @@ def export_meeting_result(meeting_id: str) -> JSONResponse:
     dependencies=[Depends(require_api_key)],
 )
 def delete_meeting_result(meeting_id: str) -> Response:
-    with _meeting_locks[meeting_id]:
+    with _meeting_lock(meeting_id):
         if _stored_result(meeting_id) is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -288,7 +296,7 @@ def delete_meeting_result(meeting_id: str) -> Response:
 def approve_commands(
     meeting_id: str, approval: ApprovalRequest
 ) -> MeetingIntelligenceResult:
-    with _meeting_locks[meeting_id]:
+    with _meeting_lock(meeting_id):
         result = _stored_result(meeting_id)
         if not result:
             raise HTTPException(
@@ -317,7 +325,7 @@ def approve_commands(
 def reject_commands(
     meeting_id: str, approval: ApprovalRequest
 ) -> MeetingIntelligenceResult:
-    with _meeting_locks[meeting_id]:
+    with _meeting_lock(meeting_id):
         result = _stored_result(meeting_id)
         if not result:
             raise HTTPException(
