@@ -11,7 +11,7 @@ BASE_PRODUCTION = {
     "RAEBURN_CORS_ORIGINS": "https://meeting.example.com",
     "DATABASE_URL": "postgresql+psycopg://user:pass@db/meeting_intelligence",
 }
-TEST_CREDENTIAL = "test-credential"
+TEST_CREDENTIAL = str("test-credential")
 
 
 def production_settings(**overrides: object) -> Settings:
