@@ -12,10 +12,10 @@ RUN apt-get update \
     && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 
-COPY apps/api/pyproject.toml ./pyproject.toml
-COPY apps/api/meeting_intelligence ./meeting_intelligence
+COPY apps/api/requirements.lock ./requirements.lock
+RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 
-RUN pip install --no-cache-dir -e .
+COPY apps/api/meeting_intelligence ./meeting_intelligence
 
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=3).read()"]

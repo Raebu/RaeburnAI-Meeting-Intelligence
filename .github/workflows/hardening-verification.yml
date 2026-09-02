@@ -37,7 +37,9 @@ jobs:
         with:
           python-version: "3.12.13"
           cache: pip
-      - run: python -m pip install -e '.[dev]'
+          cache-dependency-path: apps/api/requirements-dev.lock
+      - run: python -m pip install --require-hashes -r requirements-dev.lock
+      - run: python -m pip install --no-deps -e .
       - run: ruff check .
       - run: ruff format --check .
       - run: mypy meeting_intelligence
@@ -63,7 +65,7 @@ jobs:
           AUTO_CREATE_SCHEMA: "true"
         run: pytest
       - run: python -m build
-      - run: pip-audit --skip-editable
+      - run: pip-audit -r requirements.lock
       - name: Secret scan
         working-directory: .
         run: python scripts/check_secrets.py
@@ -82,8 +84,9 @@ jobs:
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: "22.17.1"
-          package-manager-cache: false
-      - run: npm install --no-audit --no-fund
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci --no-audit --no-fund
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
