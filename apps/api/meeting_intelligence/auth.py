@@ -99,8 +99,14 @@ def _totp_at(secret: str, timestamp: int) -> str:
     return f"{binary % (10**_TOTP_DIGITS):0{_TOTP_DIGITS}d}"
 
 
-def _verify_totp(secret: str, supplied_code: str | None, now: int | None = None) -> bool:
-    if supplied_code is None or len(supplied_code) != _TOTP_DIGITS or not supplied_code.isdigit():
+def _verify_totp(
+    secret: str, supplied_code: str | None, now: int | None = None
+) -> bool:
+    if (
+        supplied_code is None
+        or len(supplied_code) != _TOTP_DIGITS
+        or not supplied_code.isdigit()
+    ):
         return False
     current = int(time.time()) if now is None else now
     return any(
