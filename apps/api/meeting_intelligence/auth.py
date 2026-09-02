@@ -35,8 +35,6 @@ _TOTP_WINDOW = 1
 
 
 class Principal(BaseModel):
-    """Authenticated workspace principal with non-serializable MFA material."""
-
     workspace_id: str
     role: WorkspaceRole
     subject: str
