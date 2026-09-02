@@ -140,7 +140,9 @@ def test_failure_storm_dead_letters_every_job_without_cross_workspace_leakage(
     assert failed == 80
     for workspace_id in workspace_ids:
         jobs = queue.list_jobs(workspace_id)
-        expected_ids = {str(command.id) for command in commands_by_workspace[workspace_id]}
+        expected_ids = {
+            str(command.id) for command in commands_by_workspace[workspace_id]
+        }
         assert {job.id for job in jobs} == expected_ids
         assert all(job.status is DispatchStatus.dead_letter for job in jobs)
         assert all(job.last_error == "simulated provider outage" for job in jobs)
