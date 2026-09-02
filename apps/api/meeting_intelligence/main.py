@@ -278,7 +278,9 @@ def get_meeting_result(
         return result.model_copy(deep=True)
 
 
-@app.get("/v1/meetings/{meeting_id}/export", response_model=MeetingIntelligenceResult)
+@app.get(
+    "/v1/meetings/{meeting_id}/export", response_model=MeetingIntelligenceResult
+)
 def export_meeting_result(
     meeting_id: str,
     principal: Principal = Depends(require_role(WorkspaceRole.viewer)),
@@ -330,7 +332,9 @@ def delete_meeting_result(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@app.post("/v1/approvals/{meeting_id}/approve", response_model=MeetingIntelligenceResult)
+@app.post(
+    "/v1/approvals/{meeting_id}/approve", response_model=MeetingIntelligenceResult
+)
 def approve_commands(
     meeting_id: str,
     approval: ApprovalRequest,
@@ -373,7 +377,9 @@ def approve_commands(
     return response_result
 
 
-@app.post("/v1/approvals/{meeting_id}/reject", response_model=MeetingIntelligenceResult)
+@app.post(
+    "/v1/approvals/{meeting_id}/reject", response_model=MeetingIntelligenceResult
+)
 def reject_commands(
     meeting_id: str,
     approval: ApprovalRequest,
