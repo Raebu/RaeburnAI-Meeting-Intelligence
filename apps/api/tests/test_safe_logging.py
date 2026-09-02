@@ -76,5 +76,6 @@ def test_unhandled_exception_log_omits_exception_message(monkeypatch: Any) -> No
         "event": "unhandled_exception",
         "route": "/v1/meetings/{meeting_id}",
         "error_type": "ValueError",
+        "request_id": "unavailable",
     }
     assert "TRANSCRIPT_SECRET" not in repr(captured)
