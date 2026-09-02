@@ -106,8 +106,12 @@ class Settings(BaseSettings):
         return value
 
     @staticmethod
-    def _require_strings(config: dict[str, Any], system: str, keys: tuple[str, ...]) -> None:
-        if not all(isinstance(config.get(key), str) and config.get(key) for key in keys):
+    def _require_strings(
+        config: dict[str, Any], system: str, keys: tuple[str, ...]
+    ) -> None:
+        if not all(
+            isinstance(config.get(key), str) and config.get(key) for key in keys
+        ):
             joined = ", ".join(keys)
             raise ValueError(f"production {system} workspace config requires {joined}")
 
@@ -196,7 +200,9 @@ class Settings(BaseSettings):
                 )
             for config in configs:
                 if system == "github":
-                    self._require_strings(config, system, ("token", "default_repository"))
+                    self._require_strings(
+                        config, system, ("token", "default_repository")
+                    )
                 elif system == "jira":
                     self._require_strings(
                         config,
@@ -204,13 +210,17 @@ class Settings(BaseSettings):
                         ("base_url", "email", "api_token", "project_key"),
                     )
                     if not str(config["base_url"]).startswith("https://"):
-                        raise ValueError("production jira workspace base_url must use HTTPS")
+                        raise ValueError(
+                            "production jira workspace base_url must use HTTPS"
+                        )
                 elif system == "crm":
                     self._require_strings(config, system, ("api_key",))
                 elif system == "webhook":
                     self._require_strings(config, system, ("url", "signing_secret"))
                     if not str(config["url"]).startswith("https://"):
-                        raise ValueError("production webhook workspace url must use HTTPS")
+                        raise ValueError(
+                            "production webhook workspace url must use HTTPS"
+                        )
                     if len(str(config["signing_secret"])) < 32:
                         raise ValueError(
                             "production webhook signing_secret must be at least 32 characters"
