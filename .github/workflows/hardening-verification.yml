@@ -39,11 +39,7 @@ jobs:
           cache: pip
       - run: python -m pip install -e '.[dev]'
       - run: ruff check .
-      - name: Show exact Ruff formatting diff
-        run: |
-          ruff format .
-          git diff -- meeting_intelligence/config.py meeting_intelligence/dispatch_queue.py meeting_intelligence/main.py
-          exit 1
+      - run: ruff format --check .
       - run: mypy meeting_intelligence
       - name: Migration upgrade, rollback and re-upgrade
         env:
