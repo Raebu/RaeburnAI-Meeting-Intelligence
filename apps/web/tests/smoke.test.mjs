@@ -11,12 +11,15 @@ const apiClient = readFileSync(
 test('dashboard is positioned as a native RaeburnAI approval centre', () => {
   assert.match(page, /RaeburnAI native workspace/);
   assert.match(page, /Approval centre/);
-  assert.match(page, /optional destinations rather than the product&apos;s source of truth/);
+  assert.match(
+    page,
+    /optional destinations rather\s+than the product&apos;s source of truth/,
+  );
 });
 
 test('dashboard authentication remains server-side and fails closed', () => {
   assert.match(apiClient, /RAEBURN_DASHBOARD_API_KEY/);
   assert.doesNotMatch(apiClient, /NEXT_PUBLIC_.*API_KEY/);
-  assert.match(page, /The credential is never sent to the browser/);
+  assert.match(page, /The\s+credential is never sent to the browser/);
   assert.match(page, /No action has been approved or dispatched/);
 });
