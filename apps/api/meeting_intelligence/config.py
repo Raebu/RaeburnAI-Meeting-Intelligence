@@ -116,7 +116,10 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "production webhook writeback requires WEBHOOK_SIGNING_SECRET"
                 )
-        if self.llm_provider != "deterministic" and not self.openai_compatible_api_key:
+        if (
+            self.llm_provider != "deterministic"
+            and not self.openai_compatible_api_key
+        ):
             raise ValueError(
                 "external LLM provider requires OPENAI_COMPATIBLE_API_KEY"
             )
