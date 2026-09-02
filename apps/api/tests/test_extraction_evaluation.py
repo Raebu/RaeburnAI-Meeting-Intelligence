@@ -4,7 +4,11 @@ import pytest
 
 from meeting_intelligence.evaluation import ExtractionExpectation, evaluate_extraction
 from meeting_intelligence.intelligence import MeetingIntelligenceEngine
-from meeting_intelligence.schemas import Attendee, MeetingAnalyseRequest, MeetingContext
+from meeting_intelligence.schemas import (
+    Attendee,
+    MeetingAnalyseRequest,
+    MeetingContext,
+)
 
 
 @pytest.mark.parametrize(
