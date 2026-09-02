@@ -131,7 +131,10 @@ def test_failure_storm_dead_letters_every_job_without_cross_workspace_leakage(
 
     failed = 0
     while (claimed := queue.claim_next()) is not None:
-        assert queue.fail(claimed.id, "simulated provider outage") is DispatchStatus.dead_letter
+        assert (
+            queue.fail(claimed.id, "simulated provider outage")
+            is DispatchStatus.dead_letter
+        )
         failed += 1
 
     assert failed == 80
