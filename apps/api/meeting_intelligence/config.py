@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -69,6 +69,56 @@ class Settings(BaseSettings):
     webhook_signing_secret: str | None = Field(
         default=None, alias="WEBHOOK_SIGNING_SECRET"
     )
+
+    @model_validator(mode="after")
+    def validate_production_guardrails(self) -> "Settings":
+        if self.environment != "production":
+            return self
+
+        if len(self.api_key) < 32 or "change-me" in self.api_key.lower():
+            raise ValueError(
+                "production RAEBURN_API_KEY must be unique and at least 32 characters"
+            )
+        if not self.database_url.startswith("postgresql"):
+            raise ValueError("production DATABASE_URL must use PostgreSQL")
+        if "*" in self.cors_origin_list:
+            raise ValueError("production CORS origins must be explicit")
+        if not self.approvals_required:
+            raise ValueError("production APPROVALS_REQUIRED must remain true")
+        if not self.public_base_url.startswith("https://"):
+            raise ValueError("production RAEBURN_PUBLIC_BASE_URL must use HTTPS")
+
+        if self.github_writeback_enabled and (
+            not self.github_token or not self.github_default_repository
+        ):
+            raise ValueError(
+                "GitHub writeback requires GITHUB_TOKEN and GITHUB_DEFAULT_REPOSITORY"
+            )
+        if self.jira_writeback_enabled and not all(
+            [
+                self.jira_base_url,
+                self.jira_email,
+                self.jira_api_token,
+                self.jira_project_key,
+            ]
+        ):
+            raise ValueError(
+                "Jira writeback requires base URL, email, API token and project key"
+            )
+        if self.crm_writeback_enabled and not self.crm_api_key:
+            raise ValueError("CRM writeback requires CRM_API_KEY")
+        if self.webhook_writeback_enabled:
+            if not self.webhook_url or not self.webhook_url.startswith("https://"):
+                raise ValueError(
+                    "production webhook writeback requires an HTTPS WEBHOOK_URL"
+                )
+            if not self.webhook_signing_secret:
+                raise ValueError(
+                    "production webhook writeback requires WEBHOOK_SIGNING_SECRET"
+                )
+        if self.llm_provider != "deterministic" and not self.openai_compatible_api_key:
+            raise ValueError("external LLM provider requires OPENAI_COMPATIBLE_API_KEY")
+        return self
 
     @property
     def cors_origin_list(self) -> list[str]:
