@@ -105,8 +105,14 @@ class Settings(BaseSettings):
             if not isinstance(key, str) or not isinstance(value, dict):
                 raise ValueError("workspace API-key entries must map strings to objects")
             if self.environment == "production" and len(key) < 32:
-                raise ValueError("production workspace API keys must be at least 32 characters")
-            required = (value.get("workspace_id"), value.get("role"), value.get("subject"))
+                raise ValueError(
+                    "production workspace API keys must be at least 32 characters"
+                )
+            required = (
+                value.get("workspace_id"),
+                value.get("role"),
+                value.get("subject"),
+            )
             if not all(isinstance(item, str) and item for item in required):
                 raise ValueError(
                     "workspace API-key entries require workspace_id, role and subject"
