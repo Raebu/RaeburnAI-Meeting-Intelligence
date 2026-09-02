@@ -8,7 +8,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 from sqlalchemy.pool import StaticPool
 
 from meeting_intelligence.config import Settings
-from meeting_intelligence.schemas import MeetingIntelligenceResult
+from meeting_intelligence.schemas import ApprovalStatus, MeetingIntelligenceResult
 
 
 class Base(DeclarativeBase):
@@ -129,6 +129,34 @@ class MeetingResultStore:
                 session.commit()
                 return None
             return MeetingIntelligenceResult.model_validate_json(record.payload)
+
+    def list_pending_approvals(
+        self, *, workspace_id: str = "default", limit: int = 100
+    ) -> list[MeetingIntelligenceResult]:
+        """Return recent workspace meetings that still contain pending commands."""
+        cutoff = datetime.now(UTC) - timedelta(seconds=self._retention_seconds)
+        with Session(self._engine) as session:
+            records = session.scalars(
+                select(MeetingResultRecord)
+                .where(
+                    MeetingResultRecord.workspace_id == workspace_id,
+                    MeetingResultRecord.stored_at > cutoff,
+                )
+                .order_by(MeetingResultRecord.updated_at.desc())
+                .limit(500)
+            ).all()
+
+        pending: list[MeetingIntelligenceResult] = []
+        for record in records:
+            result = MeetingIntelligenceResult.model_validate_json(record.payload)
+            if any(
+                command.approval_status is ApprovalStatus.pending
+                for command in result.integration_commands
+            ):
+                pending.append(result)
+                if len(pending) >= limit:
+                    break
+        return pending
 
     def delete(self, meeting_id: str, *, workspace_id: str = "default") -> bool:
         with Session(self._engine) as session:
