@@ -43,7 +43,6 @@ class Principal(BaseModel):
     totp_secret: str | None = Field(default=None, exclude=True, repr=False)
 
 
-
 def _configured_principals(settings: Settings) -> dict[str, Principal]:
     try:
         raw = json.loads(settings.workspace_api_keys_json)
