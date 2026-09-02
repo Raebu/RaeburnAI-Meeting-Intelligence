@@ -23,14 +23,18 @@ class StubAsyncClient:
 
 
 @pytest.mark.asyncio
-async def test_post_with_retry_retries_transient_status(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_post_with_retry_retries_transient_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     async def no_sleep(delay: float) -> None:
         del delay
 
     monkeypatch.setattr(integrations.asyncio, "sleep", no_sleep)
     client = StubAsyncClient([httpx.Response(503), httpx.Response(200)])
 
-    response = await integrations._post_with_retry(client, "https://example.test")  # type: ignore[arg-type]
+    response = await integrations._post_with_retry(  # type: ignore[arg-type]
+        client, "https://example.test"
+    )
 
     assert response.status_code == 200
     assert client.calls == 2
@@ -46,7 +50,9 @@ async def test_post_with_retry_does_not_retry_permanent_client_error(
     monkeypatch.setattr(integrations.asyncio, "sleep", no_sleep)
     client = StubAsyncClient([httpx.Response(400)])
 
-    response = await integrations._post_with_retry(client, "https://example.test")  # type: ignore[arg-type]
+    response = await integrations._post_with_retry(  # type: ignore[arg-type]
+        client, "https://example.test"
+    )
 
     assert response.status_code == 400
     assert client.calls == 1
@@ -65,7 +71,9 @@ async def test_post_with_retry_retries_network_failure_then_succeeds(
         [httpx.ConnectError("temporary failure", request=request), httpx.Response(200)]
     )
 
-    response = await integrations._post_with_retry(client, "https://example.test")  # type: ignore[arg-type]
+    response = await integrations._post_with_retry(  # type: ignore[arg-type]
+        client, "https://example.test"
+    )
 
     assert response.status_code == 200
     assert client.calls == 2
@@ -87,6 +95,8 @@ async def test_post_with_retry_raises_after_bounded_network_failures(
     client = StubAsyncClient(failures)
 
     with pytest.raises(httpx.ConnectError):
-        await integrations._post_with_retry(client, "https://example.test")  # type: ignore[arg-type]
+        await integrations._post_with_retry(  # type: ignore[arg-type]
+            client, "https://example.test"
+        )
 
     assert client.calls == integrations._MAX_DISPATCH_ATTEMPTS
