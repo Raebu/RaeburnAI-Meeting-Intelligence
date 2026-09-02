@@ -5,17 +5,20 @@ from meeting_intelligence.main import (
 )
 
 
-def test_same_meeting_always_uses_same_lock() -> None:
-    first = _meeting_lock("meeting-alpha")
-    second = _meeting_lock("meeting-alpha")
+def test_same_workspace_meeting_always_uses_same_lock() -> None:
+    first = _meeting_lock("workspace-a", "meeting-alpha")
+    second = _meeting_lock("workspace-a", "meeting-alpha")
 
     assert first is second
 
 
-def test_arbitrary_meeting_ids_cannot_grow_lock_state() -> None:
+def test_arbitrary_workspace_meeting_ids_cannot_grow_lock_state() -> None:
     assert len(_meeting_lock_stripes) == _MEETING_LOCK_STRIPE_COUNT
 
-    locks = {_meeting_lock(f"attacker-controlled-{index}") for index in range(10_000)}
+    locks = {
+        _meeting_lock("workspace-a", f"attacker-controlled-{index}")
+        for index in range(10_000)
+    }
 
     assert len(_meeting_lock_stripes) == _MEETING_LOCK_STRIPE_COUNT
     assert locks.issubset(set(_meeting_lock_stripes))
