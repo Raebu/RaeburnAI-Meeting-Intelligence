@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     bootstrap_workspace_id: str = Field(
         default="default", alias="RAEBURN_BOOTSTRAP_WORKSPACE_ID"
     )
+    bootstrap_totp_secret: str | None = Field(
+        default=None, alias="RAEBURN_BOOTSTRAP_TOTP_SECRET"
+    )
     workspace_api_keys_json: str = Field(
         default="{}", alias="RAEBURN_WORKSPACE_API_KEYS"
     )
@@ -143,6 +146,11 @@ class Settings(BaseSettings):
                 )
             if value.get("role") not in {"viewer", "operator", "approver", "admin"}:
                 raise ValueError("unsupported workspace role")
+            totp_secret = value.get("totp_secret")
+            if totp_secret is not None and (
+                not isinstance(totp_secret, str) or not totp_secret.strip()
+            ):
+                raise ValueError("workspace totp_secret must be a non-empty string")
 
         workspace_integrations = self._parse_object(
             self.workspace_integrations_json, "RAEBURN_WORKSPACE_INTEGRATIONS"
