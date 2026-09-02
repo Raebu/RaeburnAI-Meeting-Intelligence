@@ -1,0 +1,41 @@
+name: Generate dependency locks
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  generate-locks:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: "22.17.1"
+          package-manager-cache: false
+      - name: Generate npm lockfile
+        working-directory: apps/web
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12.13"
+      - name: Generate hashed Python lockfile
+        run: |
+          python -m pip install pip-tools==7.6.1
+          cd apps/api
+          python -m piptools compile --generate-hashes --resolver=backtracking --extra=dev --output-file=requirements.lock pyproject.toml
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dependency-locks
+          path: |
+            apps/web/package-lock.json
+            apps/api/requirements.lock
+          if-no-files-found: error
+          retention-days: 1
