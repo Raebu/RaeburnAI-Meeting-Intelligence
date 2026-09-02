@@ -53,7 +53,9 @@ class NativeActionRecord(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False)
     owner: Mapped[str | None] = mapped_column(String(255), nullable=True)
     owner_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
-    due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    due_date: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     priority: Mapped[str] = mapped_column(String(32), nullable=False)
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
     evidence: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -134,8 +136,8 @@ class NativeWorkStore:
                 record_id = _native_id(
                     workspace_id, result.meeting_id, "decision", decision.statement
                 )
-                record = session.get(NativeDecisionRecord, record_id)
-                if record is None:
+                decision_record = session.get(NativeDecisionRecord, record_id)
+                if decision_record is None:
                     session.add(
                         NativeDecisionRecord(
                             id=record_id,
@@ -152,21 +154,21 @@ class NativeWorkStore:
                         )
                     )
                 else:
-                    record.statement = decision.statement
-                    record.rationale = decision.rationale
-                    record.confidence = decision.confidence
-                    record.evidence = decision.evidence
-                    if record.owner is None:
-                        record.owner = decision.owner
-                    record.updated_at = now
+                    decision_record.statement = decision.statement
+                    decision_record.rationale = decision.rationale
+                    decision_record.confidence = decision.confidence
+                    decision_record.evidence = decision.evidence
+                    if decision_record.owner is None:
+                        decision_record.owner = decision.owner
+                    decision_record.updated_at = now
 
             for action in result.action_items:
                 identity = f"{action.title}\n{action.description}"
                 record_id = _native_id(
                     workspace_id, result.meeting_id, "action", identity
                 )
-                record = session.get(NativeActionRecord, record_id)
-                if record is None:
+                action_record = session.get(NativeActionRecord, record_id)
+                if action_record is None:
                     session.add(
                         NativeActionRecord(
                             id=record_id,
@@ -187,17 +189,17 @@ class NativeWorkStore:
                         )
                     )
                 else:
-                    record.title = action.title
-                    record.description = action.description
-                    record.confidence = action.confidence
-                    record.evidence = action.evidence
-                    record.priority = action.priority.value
-                    if record.owner is None:
-                        record.owner = action.owner
-                        record.owner_email = action.owner_email
-                    if record.due_date is None:
-                        record.due_date = action.due_date
-                    record.updated_at = now
+                    action_record.title = action.title
+                    action_record.description = action.description
+                    action_record.confidence = action.confidence
+                    action_record.evidence = action.evidence
+                    action_record.priority = action.priority.value
+                    if action_record.owner is None:
+                        action_record.owner = action.owner
+                        action_record.owner_email = action.owner_email
+                    if action_record.due_date is None:
+                        action_record.due_date = action.due_date
+                    action_record.updated_at = now
             session.commit()
 
     def list_decisions(
