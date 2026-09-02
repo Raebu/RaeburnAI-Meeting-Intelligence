@@ -175,15 +175,12 @@ class Settings(BaseSettings):
             raise ValueError("production APPROVALS_REQUIRED must remain true")
         if not self.public_base_url.startswith("https://"):
             raise ValueError("production RAEBURN_PUBLIC_BASE_URL must use HTTPS")
-        if self.email_followup_enabled:
-            raise ValueError(
-                "production email follow-up is not implemented; keep EMAIL_FOLLOWUP_ENABLED=false"
-            )
 
         enabled_systems = {
             "github": self.github_writeback_enabled,
             "jira": self.jira_writeback_enabled,
             "crm": self.crm_writeback_enabled,
+            "email": self.email_followup_enabled,
             "webhook": self.webhook_writeback_enabled,
         }
         for system, enabled in enabled_systems.items():
@@ -217,6 +214,21 @@ class Settings(BaseSettings):
                         )
                 elif system == "crm":
                     self._require_strings(config, system, ("api_key",))
+                elif system == "email":
+                    self._require_strings(
+                        config,
+                        system,
+                        ("host", "username", "password", "from_address"),
+                    )
+                    port = config.get("port")
+                    if not isinstance(port, int) or isinstance(port, bool) or not 1 <= port <= 65535:
+                        raise ValueError(
+                            "production email workspace config requires a valid port"
+                        )
+                    if config.get("starttls") is not True:
+                        raise ValueError(
+                            "production email workspace config requires starttls=true"
+                        )
                 elif system == "webhook":
                     self._require_strings(config, system, ("url", "signing_secret"))
                     if not str(config["url"]).startswith("https://"):
