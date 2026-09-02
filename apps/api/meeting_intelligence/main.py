@@ -20,6 +20,7 @@ from meeting_intelligence.auth import (
     require_role,
 )
 from meeting_intelligence.config import get_settings
+from meeting_intelligence.dispatch_queue import DispatchJob, DispatchQueue
 from meeting_intelligence.intelligence import MeetingIntelligenceEngine
 from meeting_intelligence.schemas import (
     ApprovalRequest,
@@ -53,6 +54,8 @@ app.add_middleware(
 _engine = MeetingIntelligenceEngine()
 _store = MeetingResultStore(settings)
 _store.bootstrap_nonproduction_schema()
+_dispatch_queue = DispatchQueue(settings)
+_dispatch_queue.bootstrap_nonproduction_schema()
 _rate_window: dict[str, deque[float]] = {}
 _rate_limit_lock = Lock()
 _MEETING_LOCK_STRIPE_COUNT = 256
@@ -209,10 +212,10 @@ def healthz() -> HealthResponse:
 
 @app.get("/readyz", response_model=HealthResponse)
 def readyz() -> HealthResponse:
-    if not _store.ready():
+    if not _store.ready() or not _dispatch_queue.ready():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Persistence layer is not ready",
+            detail="Persistence or dispatch layer is not ready",
         )
     return HealthResponse(
         status="ready", service="meeting-intelligence-api", version="0.1.0"
@@ -350,12 +353,22 @@ def approve_commands(
             reset_retention=False,
             workspace_id=principal.workspace_id,
         )
+        for command in targets:
+            _dispatch_queue.enqueue(principal.workspace_id, meeting_id, command)
+        result.audit_events.append(f"commands.queued:{len(targets)}")
+        _store.put(
+            meeting_id,
+            result,
+            reset_retention=False,
+            workspace_id=principal.workspace_id,
+        )
         response_result = result.model_copy(deep=True)
     logger.info(
         "commands_approved",
         workspace_ref=_safe_ref(principal.workspace_id),
         meeting_ref=_safe_ref(meeting_id),
         actor_ref=_safe_ref(principal.subject),
+        queued=len(targets),
     )
     return response_result
 
@@ -391,3 +404,39 @@ def reject_commands(
         actor_ref=_safe_ref(principal.subject),
     )
     return response_result
+
+
+@app.get("/v1/dispatch", response_model=list[DispatchJob])
+def list_dispatch_jobs(
+    meeting_id: str | None = None,
+    principal: Principal = Depends(require_role(WorkspaceRole.operator)),
+) -> list[DispatchJob]:
+    return _dispatch_queue.list_jobs(principal.workspace_id, meeting_id=meeting_id)
+
+
+@app.post("/v1/dispatch/{job_id}/retry", response_model=DispatchJob)
+def retry_dispatch_job(
+    job_id: str,
+    principal: Principal = Depends(require_role(WorkspaceRole.operator)),
+) -> DispatchJob:
+    if not _dispatch_queue.retry_dead_letter(principal.workspace_id, job_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Dispatch job is not a retryable dead-letter job",
+        )
+    jobs = _dispatch_queue.list_jobs(principal.workspace_id)
+    return next(job for job in jobs if job.id == job_id)
+
+
+@app.post("/v1/dispatch/{job_id}/cancel", response_model=DispatchJob)
+def cancel_dispatch_job(
+    job_id: str,
+    principal: Principal = Depends(require_role(WorkspaceRole.operator)),
+) -> DispatchJob:
+    if not _dispatch_queue.cancel(principal.workspace_id, job_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Dispatch job cannot be cancelled",
+        )
+    jobs = _dispatch_queue.list_jobs(principal.workspace_id)
+    return next(job for job in jobs if job.id == job_id)
