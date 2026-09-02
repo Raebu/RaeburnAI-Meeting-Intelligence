@@ -123,10 +123,7 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "production webhook writeback requires an HTTPS WEBHOOK_URL"
                 )
-            if (
-                not self.webhook_signing_secret
-                or len(self.webhook_signing_secret) < 32
-            ):
+            if not self.webhook_signing_secret or len(self.webhook_signing_secret) < 32:
                 raise ValueError(
                     "production WEBHOOK_SIGNING_SECRET must be at least 32 characters"
                 )
