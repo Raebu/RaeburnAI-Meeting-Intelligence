@@ -57,28 +57,29 @@ jobs:
         with:
           persist-credentials: false
       - name: GitHub dependency review
-        if: github.event.repository.visibility == 'public'
+        id: native-dependency-review
+        continue-on-error: true
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: high
-      - name: Set up Python for private-repository fallback
-        if: github.event.repository.visibility != 'public'
+      - name: Set up Python for no-cost fallback
+        if: steps.native-dependency-review.outcome == 'failure'
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
-      - name: Audit Python dependencies without paid GitHub features
-        if: github.event.repository.visibility != 'public'
+      - name: Audit Python dependencies when native review is unavailable
+        if: steps.native-dependency-review.outcome == 'failure'
         working-directory: apps/api
         run: |
           python -m pip install -e '.[dev]'
           pip-audit --skip-editable
-      - name: Set up Node for private-repository fallback
-        if: github.event.repository.visibility != 'public'
+      - name: Set up Node for no-cost fallback
+        if: steps.native-dependency-review.outcome == 'failure'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: '22'
-      - name: Audit web dependencies without paid GitHub features
-        if: github.event.repository.visibility != 'public'
+      - name: Audit web dependencies when native review is unavailable
+        if: steps.native-dependency-review.outcome == 'failure'
         working-directory: apps/web
         run: |
           npm install --no-audit --no-fund
