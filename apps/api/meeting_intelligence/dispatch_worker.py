@@ -17,15 +17,13 @@ logger = structlog.get_logger(__name__)
 
 
 def _adapter_for(settings: Settings, system: str) -> IntegrationAdapter:
-    adapters: dict[str, type[IntegrationAdapter]] = {
-        "github": GitHubIssueAdapter,
-        "jira": JiraAdapter,
-        "webhook": WebhookAdapter,
-    }
-    adapter_type = adapters.get(system)
-    if adapter_type is None:
-        raise ValueError(f"unsupported integration system: {system}")
-    return adapter_type(settings)
+    if system == "github":
+        return GitHubIssueAdapter(settings)
+    if system == "jira":
+        return JiraAdapter(settings)
+    if system == "webhook":
+        return WebhookAdapter(settings)
+    raise ValueError(f"unsupported integration system: {system}")
 
 
 async def run_once(queue: DispatchQueue, settings: Settings) -> bool:
