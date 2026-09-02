@@ -44,9 +44,7 @@ def verify_inbound_signature(
         return False
     supplied = signature.removeprefix("sha256=")
     message = str(timestamp_value).encode() + b"." + body
-    expected = hmac.new(
-        signing_secret.encode(), message, hashlib.sha256
-    ).hexdigest()
+    expected = hmac.new(signing_secret.encode(), message, hashlib.sha256).hexdigest()
     return hmac.compare_digest(supplied, expected)
 
 
