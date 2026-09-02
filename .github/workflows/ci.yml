@@ -48,38 +48,27 @@ jobs:
       - run: npm test
       - run: npm run build
 
-  dependency-review:
-    name: Dependency review
+  dependency-audit:
+    name: Dependency audit
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: GitHub dependency review
-        id: native-dependency-review
-        continue-on-error: true
-        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
-        with:
-          fail-on-severity: high
-      - name: Set up Python for no-cost fallback
-        if: steps.native-dependency-review.outcome == 'failure'
+      - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
-      - name: Audit Python dependencies when native review is unavailable
-        if: steps.native-dependency-review.outcome == 'failure'
+      - name: Audit Python dependencies
         working-directory: apps/api
         run: |
           python -m pip install -e '.[dev]'
           pip-audit --skip-editable
-      - name: Set up Node for no-cost fallback
-        if: steps.native-dependency-review.outcome == 'failure'
+      - name: Set up Node
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: '22'
-      - name: Audit web dependencies when native review is unavailable
-        if: steps.native-dependency-review.outcome == 'failure'
+      - name: Audit web dependencies
         working-directory: apps/web
         run: |
           npm install --no-audit --no-fund
