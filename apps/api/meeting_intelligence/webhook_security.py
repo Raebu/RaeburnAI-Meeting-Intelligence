@@ -20,7 +20,9 @@ class WebhookReceiptRecord(Base):
     workspace_id: Mapped[str] = mapped_column(String(255), primary_key=True)
     event_id: Mapped[str] = mapped_column(String(255), primary_key=True)
     body_digest: Mapped[str] = mapped_column(String(64), nullable=False)
-    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
 
 def verify_inbound_signature(
