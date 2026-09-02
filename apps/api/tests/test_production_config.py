@@ -38,7 +38,8 @@ def production_settings(**overrides: object) -> Settings:
     ],
 )
 def test_production_rejects_unsafe_configuration(
-    overrides: dict[str, object], message: str
+    overrides: dict[str, object],
+    message: str,
 ) -> None:
     with pytest.raises(ValidationError, match=message):
         production_settings(**overrides)
