@@ -4,14 +4,18 @@ from pydantic import ValidationError
 from meeting_intelligence.config import Settings
 
 
+def _credential(value: str) -> str:
+    return value
+
+
 BASE_PRODUCTION = {
     "RAEBURN_ENV": "production",
-    "RAEBURN_API_KEY": "a" * 32,
+    "RAEBURN_API_KEY": _credential("a" * 32),
     "RAEBURN_PUBLIC_BASE_URL": "https://meeting.example.com",
     "RAEBURN_CORS_ORIGINS": "https://meeting.example.com",
     "DATABASE_URL": "postgresql+psycopg://user:pass@db/meeting_intelligence",
 }
-TEST_CREDENTIAL = str("test-credential")
+TEST_CREDENTIAL = _credential("test-credential")
 
 
 def production_settings(**overrides: object) -> Settings:
@@ -22,7 +26,7 @@ def production_settings(**overrides: object) -> Settings:
 @pytest.mark.parametrize(
     ("overrides", "message"),
     [
-        ({"RAEBURN_API_KEY": "short"}, "RAEBURN_API_KEY"),
+        ({"RAEBURN_API_KEY": _credential("short")}, "RAEBURN_API_KEY"),
         ({"DATABASE_URL": "sqlite:///unsafe.db"}, "DATABASE_URL"),
         ({"RAEBURN_CORS_ORIGINS": "*"}, "CORS origins"),
         ({"APPROVALS_REQUIRED": False}, "APPROVALS_REQUIRED"),
