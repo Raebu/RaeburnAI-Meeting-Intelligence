@@ -28,9 +28,7 @@ def _labels(labels: dict[str, str]) -> tuple[tuple[str, str], ...]:
     """Allow only bounded operational labels; never transcript/user content."""
     return tuple(
         sorted(
-            (key, str(value))
-            for key, value in labels.items()
-            if key in _ALLOWED_LABELS
+            (key, str(value)) for key, value in labels.items() if key in _ALLOWED_LABELS
         )
     )
 
