@@ -19,9 +19,7 @@ from meeting_intelligence.observability import increment, safe_ref, trace_span
 logger = structlog.get_logger(__name__)
 
 
-def _adapter_for(
-    settings: Settings, workspace_id: str, system: str
-) -> IntegrationAdapter:
+def _adapter_for(settings: Settings, workspace_id: str, system: str) -> IntegrationAdapter:
     workspace_config = settings.integration_config(workspace_id, system)
     if system == "github":
         return GitHubIssueAdapter(settings, workspace_config)
