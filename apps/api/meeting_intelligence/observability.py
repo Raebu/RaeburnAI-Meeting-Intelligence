@@ -13,7 +13,9 @@ import structlog
 logger = structlog.get_logger(__name__)
 _lock = Lock()
 _counters: Counter[tuple[str, tuple[tuple[str, str], ...]]] = Counter()
-_histograms: dict[tuple[str, tuple[tuple[str, str], ...]], tuple[int, float, float]] = {}
+_histograms: dict[
+    tuple[str, tuple[tuple[str, str], ...]], tuple[int, float, float]
+] = {}
 _ALLOWED_LABELS = {"method", "route", "status", "operation", "system", "outcome"}
 
 
