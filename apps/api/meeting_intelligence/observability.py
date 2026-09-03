@@ -53,7 +53,9 @@ def trace_span(name: str, **fields: str) -> Iterator[None]:
     started = time.perf_counter()
     trace_id = hashlib.sha256(f"{time.time_ns()}:{name}".encode()).hexdigest()[:16]
     safe_fields = {
-        key: value for key, value in fields.items() if key in _ALLOWED_LABELS
+        key: value
+        for key, value in fields.items()
+        if key in _ALLOWED_LABELS
     }
     logger.info("trace_started", span=name, trace_id=trace_id, **safe_fields)
     try:
