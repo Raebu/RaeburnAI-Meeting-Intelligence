@@ -40,7 +40,11 @@ def test_safe_ref_is_stable_and_non_reversible() -> None:
 
 
 def test_trace_span_records_duration_without_payload() -> None:
-    with trace_span("dispatch", system="github", transcript="never-log-this"):
+    with trace_span(
+        "dispatch",
+        system="github",
+        transcript="never-log-this",
+    ):
         pass
     rendered = prometheus_metrics()
     assert "trace_duration_ms_count" in rendered
