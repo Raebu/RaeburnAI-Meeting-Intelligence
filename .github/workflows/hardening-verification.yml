@@ -9,7 +9,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
 
 concurrency:
   group: hardening-${{ github.event.pull_request.number }}
@@ -42,19 +41,7 @@ jobs:
       - run: python -m pip install --require-hashes -r requirements-dev.lock
       - run: python -m pip install --no-deps -e .
       - run: ruff check .
-      - name: Temporary canonical Ruff diagnostic
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          ruff format .
-          {
-            echo 'Canonical Ruff diff:'
-            echo '```diff'
-            git diff -- meeting_intelligence tests
-            echo '```'
-          } > /tmp/ruff-diff.md
-          gh pr comment "${{ github.event.pull_request.number }}" --body-file /tmp/ruff-diff.md
-          git diff --quiet -- meeting_intelligence tests
+      - run: ruff format --check .
       - run: mypy meeting_intelligence
       - name: Migration upgrade, rollback and re-upgrade
         env:
