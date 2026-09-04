@@ -13,13 +13,13 @@
   "dependencies": {
     "next": "15.5.24",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.2.7"
   },
   "devDependencies": {
     "@eslint/eslintrc": "3.3.6",
     "@types/node": "22.15.34",
     "@types/react": "19.1.8",
-    "@types/react-dom": "19.1.6",
+    "@types/react-dom": "19.2.3",
     "eslint": "9.29.0",
     "eslint-config-next": "15.5.24",
     "typescript": "5.8.3"
