@@ -1,5 +1,9 @@
 name: CI
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main]
@@ -13,6 +17,7 @@ jobs:
   api:
     name: API lint, typecheck and tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: apps/api
@@ -32,8 +37,9 @@ jobs:
       - run: pytest --cov=meeting_intelligence --cov-report=term-missing --cov-fail-under=60
 
   web:
-    name: Web lint, typecheck, tests and build
+    name: Web lint, typecheck and tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: apps/web
@@ -50,11 +56,12 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
-      - run: npm run build
 
   dependency-audit:
+    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'run-full-ci')
     name: Dependency audit
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -83,8 +90,10 @@ jobs:
           npm audit --audit-level=high
 
   codeql:
+    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'run-full-ci')
     name: CodeQL analysis
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       security-events: write
@@ -101,11 +110,23 @@ jobs:
           languages: ${{ matrix.language }}
       - uses: github/codeql-action/analyze@6f5948dfacef28e207b48d0905cf90c03365536d # v3.37.9
 
-  docker:
-    name: Docker build
+  heavy-build:
+    needs: [api, web]
+    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'run-full-ci')
+    name: Production web and Docker build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '22.17.1'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+        working-directory: apps/web
+      - run: npm run build
+        working-directory: apps/web
       - run: docker compose build
