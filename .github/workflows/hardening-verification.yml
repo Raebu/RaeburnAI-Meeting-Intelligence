@@ -119,7 +119,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          id="$(docker run -d -p 127.0.0.1:8080:8080             -e RAEBURN_ENV=test             -e RAEBURN_API_KEY=test-api-key-not-a-production-secret             -e RAEBURN_CORS_ORIGINS=http://testserver             -e RAEBURN_RATE_LIMIT_PER_MINUTE=1000             -e DATABASE_URL=sqlite+pysqlite:///./runtime.db             -e AUTO_CREATE_SCHEMA=true             meeting-intelligence-api:${{ github.sha }})"
+          id="$(docker run -d -p 127.0.0.1:8080:8080             -e RAEBURN_ENV=test             -e RAEBURN_API_KEY=test-api-key-not-a-production-secret             -e RAEBURN_CORS_ORIGINS=http://testserver             -e RAEBURN_RATE_LIMIT_PER_MINUTE=1000             -e DATABASE_URL=sqlite+pysqlite:////tmp/runtime.db             -e AUTO_CREATE_SCHEMA=true             meeting-intelligence-api:${{ github.sha }})"
           trap 'docker logs "$id" || true; docker rm -f "$id" >/dev/null 2>&1 || true' EXIT
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:8080/healthz | grep -q '"status":"ok"'; then exit 0; fi
