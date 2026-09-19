@@ -101,7 +101,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Validate software supply-chain policy
+      - name: Validate central RAI-112 policy
+        uses: The-Raeburn-Group/RaeburnAI-Workflow-Auditor/.github/actions/rai112-policy@f4d258f90557cd9dffa5d82fc7e988b80fe44e43
+        with:
+          root: .
+          profile: release
+
+      - name: Validate repository-local supply-chain policy
         run: python scripts/validate_supply_chain.py
       - name: Validate Compose configuration
         run: |
