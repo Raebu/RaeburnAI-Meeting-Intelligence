@@ -101,6 +101,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Validate software supply-chain policy
+        run: python scripts/validate_supply_chain.py
       - name: Validate Compose configuration
         run: |
           cp .env.example .env
@@ -113,11 +115,31 @@ jobs:
           format: table
           exit-code: "1"
           severity: CRITICAL,HIGH
-          ignore-unfixed: true
+      - name: Smoke-test API image
+        shell: bash
+        run: |
+          set -euo pipefail
+          id="$(docker run -d -p 127.0.0.1:8080:8080             -e RAEBURN_ENV=test             -e RAEBURN_API_KEY=test-api-key-not-a-production-secret             -e RAEBURN_CORS_ORIGINS=http://testserver             -e RAEBURN_RATE_LIMIT_PER_MINUTE=1000             -e DATABASE_URL=sqlite+pysqlite:///./runtime.db             -e AUTO_CREATE_SCHEMA=true             meeting-intelligence-api:${{ github.sha }})"
+          trap 'docker logs "$id" || true; docker rm -f "$id" >/dev/null 2>&1 || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8080/healthz | grep -q '"status":"ok"'; then exit 0; fi
+            sleep 1
+          done
+          exit 1
       - uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
           image-ref: meeting-intelligence-web:${{ github.sha }}
           format: table
           exit-code: "1"
           severity: CRITICAL,HIGH
-          ignore-unfixed: true
+      - name: Smoke-test web image
+        shell: bash
+        run: |
+          set -euo pipefail
+          id="$(docker run -d -p 127.0.0.1:3000:3000 meeting-intelligence-web:${{ github.sha }})"
+          trap 'docker logs "$id" || true; docker rm -f "$id" >/dev/null 2>&1 || true' EXIT
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:3000/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
