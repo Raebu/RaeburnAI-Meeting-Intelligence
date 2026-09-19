@@ -1,0 +1,26 @@
+name: Resolve Meeting Intelligence image digests
+
+on:
+  push:
+    branches:
+      - feat/rai112-supply-chain-hardening
+    paths:
+      - '.github/workflows/resolve-rai112-image-digests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Resolve official multi-platform OCI indexes
+        shell: bash
+        run: |
+          set -euo pipefail
+          for image in             "python:3.12-alpine3.24"             "postgres:16-alpine"             "redis:7-alpine"
+          do
+            echo "IMAGE=$image"
+            docker buildx imagetools inspect "$image" | sed -n '1,5p'
+          done
